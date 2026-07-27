@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+.venv-build/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+services/python-backend/build/
+services/python-backend/dist/
+apps/desktop/src-tauri/gen/
