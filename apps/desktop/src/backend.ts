@@ -3,9 +3,11 @@ import {
   appErrorSchema,
   backendStatusSchema,
   echoResponseSchema,
+  runtimeProbeConfigSchema,
   type AppError,
   type BackendStatus,
   type EchoResponse,
+  type RuntimeProbeConfig,
 } from "./contracts";
 
 export async function getBackendStatus(): Promise<BackendStatus> {
@@ -14,6 +16,16 @@ export async function getBackendStatus(): Promise<BackendStatus> {
 
 export async function echoText(text: string): Promise<EchoResponse> {
   return echoResponseSchema.parse(await invoke("echo_text", { text }));
+}
+
+export async function getRuntimeProbeConfig(): Promise<RuntimeProbeConfig> {
+  return runtimeProbeConfigSchema.parse(await invoke("runtime_probe_config"));
+}
+
+export async function writeRuntimeEvidence(
+  evidence: Record<string, unknown>,
+): Promise<void> {
+  await invoke("write_runtime_evidence", { evidence });
 }
 
 export function toSafeError(value: unknown): AppError {
@@ -28,4 +40,3 @@ export function toSafeError(value: unknown): AppError {
     traceId: "frontend-unmapped",
   };
 }
-
