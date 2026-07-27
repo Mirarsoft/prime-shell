@@ -48,13 +48,9 @@ fn echo_text(text: String, state: State<'_, BackendState>) -> AppResult<EchoResp
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let client = app
-                .path()
-                .resource_dir()
-                .ok()
-                .and_then(|resource_dir| {
-                    BackendClient::launch(LaunchSpec::from_resource_dir(&resource_dir)).ok()
-                });
+            let client = app.path().resource_dir().ok().and_then(|resource_dir| {
+                BackendClient::launch(LaunchSpec::from_resource_dir(&resource_dir)).ok()
+            });
             app.manage(BackendState {
                 client: Mutex::new(client),
             });
@@ -64,4 +60,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running Prime Shell Echo Spike");
 }
-
