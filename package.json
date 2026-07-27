@@ -18,6 +18,7 @@
     "typecheck": "pnpm --filter @prime-shell/desktop typecheck",
     "sidecar:build": "bash scripts/build-sidecar/build-sidecar.sh",
     "sidecar:test": "python3 -m unittest discover -s services/python-backend/tests -v",
-    "sidecar:verify": "python3 scripts/verify/packaged_echo.py"
+    "sidecar:verify": "python3 scripts/verify/packaged_echo.py",
+    "native:verify": "bash scripts/verify/native_runtime.sh"
   }
 }
