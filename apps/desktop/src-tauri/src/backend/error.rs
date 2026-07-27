@@ -4,6 +4,7 @@ use thiserror::Error;
 pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Debug, Error, Serialize)]
+#[error("{message}")]
 #[serde(rename_all = "camelCase")]
 pub struct AppError {
     pub code: &'static str,
