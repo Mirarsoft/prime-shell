@@ -1,0 +1,11 @@
+name: Work Session GitHub Preflight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Print preflight result
+        run: echo "GitHub Actions preflight passed"
