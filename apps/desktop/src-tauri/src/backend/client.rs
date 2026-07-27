@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     io::{self, BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
@@ -88,7 +87,11 @@ impl BackendClient {
             .map_err(|_| AppError::unavailable(trace))?;
         let manifest: BundleManifest = serde_json::from_slice(&manifest_bytes)
             .map_err(|_| AppError::mismatch("Sidecar manifest is invalid.", trace))?;
-        verify_bundle(working_directory_from(&executable, trace)?, &manifest, trace)?;
+        verify_bundle(
+            working_directory_from(&executable, trace)?,
+            &manifest,
+            trace,
+        )?;
 
         let working_directory = working_directory_from(&executable, trace)?;
         let mut command = Command::new(&executable);
@@ -157,7 +160,12 @@ impl BackendClient {
         }
     }
 
-    pub fn echo(&mut self, text: &str, request_id: &str, trace_id: &str) -> AppResult<EchoResponse> {
+    pub fn echo(
+        &mut self,
+        text: &str,
+        request_id: &str,
+        trace_id: &str,
+    ) -> AppResult<EchoResponse> {
         if text.chars().count() > super::protocol::TEXT_MAX_CHARACTERS {
             return Err(AppError::exhausted(trace_id));
         }
@@ -230,7 +238,10 @@ fn validate_response(
         || response.request_id.as_deref() != Some(request_id)
         || response.trace_id != trace_id
     {
-        return Err(AppError::protocol("Backend response identity mismatch.", trace_id));
+        return Err(AppError::protocol(
+            "Backend response identity mismatch.",
+            trace_id,
+        ));
     }
     match response.kind.as_str() {
         "result" => {
@@ -252,7 +263,10 @@ fn validate_response(
             match error.code.as_str() {
                 "VALIDATION_ERROR" => Err(AppError::validation(error.message, trace_id)),
                 "RESOURCE_EXHAUSTED" => Err(AppError::exhausted(trace_id)),
-                _ => Err(AppError::protocol("Backend rejected the request.", trace_id)),
+                _ => Err(AppError::protocol(
+                    "Backend rejected the request.",
+                    trace_id,
+                )),
             }
         }
         _ => Err(AppError::protocol(
@@ -355,11 +369,17 @@ fn verify_bundle(bundle_root: &Path, manifest: &BundleManifest, trace_id: &str) 
         let bytes = fs::read(&canonical)
             .map_err(|_| AppError::mismatch("Sidecar bundle file is unreadable.", trace_id))?;
         if bytes.len() as u64 != entry.size {
-            return Err(AppError::mismatch("Sidecar bundle size mismatch.", trace_id));
+            return Err(AppError::mismatch(
+                "Sidecar bundle size mismatch.",
+                trace_id,
+            ));
         }
         let hash = format!("{:x}", Sha256::digest(&bytes));
         if hash != entry.sha256 {
-            return Err(AppError::mismatch("Sidecar bundle hash mismatch.", trace_id));
+            return Err(AppError::mismatch(
+                "Sidecar bundle hash mismatch.",
+                trace_id,
+            ));
         }
         total = total.saturating_add(entry.size);
     }
