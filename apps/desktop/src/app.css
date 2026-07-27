@@ -1,0 +1,72 @@
+:root {
+  font-family:
+    "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: light dark;
+  background: #f5f5f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    background: #1f1f1f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 500px;
+  min-height: 480px;
+}
+
+.app {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 32px;
+}
+
+.card {
+  display: grid;
+  gap: 20px;
+  width: min(680px, 100%);
+  padding: 28px;
+}
+
+.card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.status {
+  min-width: 140px;
+  text-align: right;
+}
+
+.result {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+}
+
+output {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.error {
+  color: #b10e1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error {
+    color: #dc626d;
+  }
+}
+
