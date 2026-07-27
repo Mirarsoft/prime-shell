@@ -1,0 +1,13 @@
+{
+  "protocol": "generic-app",
+  "kind": "hello",
+  "protocolMin": 1,
+  "protocolMax": 1,
+  "backendVersion": "0.1.0",
+  "buildId": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "targetTriple": "linux-x86_64",
+  "pythonVersion": "3.12.13",
+  "schemaHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "supportedOperations": ["spike.echo"]
+}
+
