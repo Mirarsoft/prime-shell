@@ -1,0 +1,23 @@
+{
+  "name": "prime-shell",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "24.14.0",
+    "pnpm": "11.7.0"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @prime-shell/desktop build",
+    "contract:test": "node scripts/verify/contracts.mjs",
+    "lint": "pnpm --filter @prime-shell/desktop lint",
+    "test": "pnpm --filter @prime-shell/desktop test",
+    "typecheck": "pnpm --filter @prime-shell/desktop typecheck",
+    "sidecar:build": "bash scripts/build-sidecar/build-sidecar.sh",
+    "sidecar:test": "python3 -m unittest discover -s services/python-backend/tests -v",
+    "sidecar:verify": "python3 scripts/verify/packaged_echo.py"
+  }
+}
