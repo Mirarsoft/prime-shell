@@ -10,11 +10,18 @@ jobs:
   ubuntu-2404:
     name: Ubuntu 24.04 WP01 validation
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: fresh-source/prime-shell
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install native Tauri prerequisites
+        working-directory: .
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -24,6 +31,36 @@ jobs:
             patchelf \
             pkg-config \
             xvfb
+
+      - name: Verify and extract authoritative snapshot
+        working-directory: .
+        run: |
+          mkdir -p fresh-source
+          git archive \
+            --format=zip \
+            --prefix=prime-shell/ \
+            --output="$RUNNER_TEMP/prime-shell-authoritative.zip" \
+            HEAD
+          unzip -t "$RUNNER_TEMP/prime-shell-authoritative.zip"
+          python3 - "$RUNNER_TEMP/prime-shell-authoritative.zip" <<'PY'
+          import sys
+          import zipfile
+          from pathlib import PurePosixPath
+
+          archive = zipfile.ZipFile(sys.argv[1])
+          roots = set()
+          for name in archive.namelist():
+              path = PurePosixPath(name)
+              if path.is_absolute() or ".." in path.parts:
+                  raise SystemExit(f"unsafe archive path: {name}")
+              if path.parts:
+                  roots.add(path.parts[0])
+          if roots != {"prime-shell"}:
+              raise SystemExit(f"unexpected archive roots: {sorted(roots)}")
+          PY
+          unzip -q "$RUNNER_TEMP/prime-shell-authoritative.zip" -d fresh-source
+          test -f fresh-source/prime-shell/apps/desktop/src-tauri/Cargo.lock
+          sha256sum "$RUNNER_TEMP/prime-shell-authoritative.zip"
 
       - name: Set up Node
         uses: actions/setup-node@v4
