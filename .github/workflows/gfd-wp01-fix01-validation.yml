@@ -1,0 +1,88 @@
+name: GFD WP01 FIX01 Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ubuntu-2404:
+    name: Ubuntu 24.04 WP01 validation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install native Tauri prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            pkg-config \
+            xvfb
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate contracts
+        run: pnpm contract:test
+
+      - name: Typecheck frontend
+        run: pnpm typecheck
+
+      - name: Lint frontend
+        run: pnpm lint
+
+      - name: Test frontend
+        run: pnpm test
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Test Python sidecar protocol
+        run: pnpm sidecar:test
+
+      - name: Create pinned Python build environment
+        run: |
+          python3 -m venv .venv-build
+          .venv-build/bin/python -m pip install --no-input -r services/python-backend/requirements-build.lock
+
+      - name: Build packaged Python sidecar
+        run: pnpm sidecar:build
+
+      - name: Verify packaged Unicode echo
+        run: pnpm sidecar:verify
+
+      - name: Check Rust formatting
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      - name: Lint Rust
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test Rust
+        working-directory: apps/desktop/src-tauri
+        env:
+          PRIME_SHELL_PACKAGED_SIDECAR: ../../../services/python-backend/dist/sidecar/linux-x86_64/prime-shell-python-backend/prime-shell-python-backend
+        run: cargo test -- --include-ignored
+
+      - name: Build Tauri release
+        run: xvfb-run -a pnpm --filter @prime-shell/desktop tauri build --bundles deb
