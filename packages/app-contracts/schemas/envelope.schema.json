@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prime-shell.local/schemas/envelope.schema.json",
+  "title": "Prime Shell Request and Response Envelopes",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind", "requestId", "traceId", "operation", "payload"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "request" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operation": { "const": "spike.echo" },
+        "payload": { "$ref": "operations/spike.echo.schema.json#/$defs/request" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind", "requestId", "traceId", "operation", "payload"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "result" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operation": { "const": "spike.echo" },
+        "payload": { "$ref": "operations/spike.echo.schema.json#/$defs/response" }
+      }
+    },
+    {
+      "$ref": "errors.schema.json"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "shutdown" }
+      }
+    }
+  ]
+}
+

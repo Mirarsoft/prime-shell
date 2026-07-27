@@ -1,0 +1,12 @@
+{
+  "protocol": "generic-app",
+  "kind": "request",
+  "requestId": "request-3",
+  "traceId": "trace-3",
+  "operation": "spike.echo",
+  "payload": {
+    "text": "hello",
+    "unexpected": true
+  }
+}
+

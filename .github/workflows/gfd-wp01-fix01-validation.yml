@@ -1,0 +1,130 @@
+name: GFD WP01 FIX01 Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ubuntu-2404:
+    name: Ubuntu 24.04 WP01 validation
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: fresh-source/prime-shell
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install native Tauri prerequisites
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            pkg-config \
+            xvfb
+
+      - name: Verify and extract authoritative snapshot
+        working-directory: .
+        run: |
+          mkdir -p fresh-source
+          git archive \
+            --format=zip \
+            --prefix=prime-shell/ \
+            --output="$RUNNER_TEMP/prime-shell-authoritative.zip" \
+            HEAD
+          unzip -t "$RUNNER_TEMP/prime-shell-authoritative.zip"
+          python3 - "$RUNNER_TEMP/prime-shell-authoritative.zip" <<'PY'
+          import sys
+          import zipfile
+          from pathlib import PurePosixPath
+
+          archive = zipfile.ZipFile(sys.argv[1])
+          roots = set()
+          for name in archive.namelist():
+              path = PurePosixPath(name)
+              if path.is_absolute() or ".." in path.parts:
+                  raise SystemExit(f"unsafe archive path: {name}")
+              if path.parts:
+                  roots.add(path.parts[0])
+          if roots != {"prime-shell"}:
+              raise SystemExit(f"unexpected archive roots: {sorted(roots)}")
+          PY
+          unzip -q "$RUNNER_TEMP/prime-shell-authoritative.zip" -d fresh-source
+          test -f fresh-source/prime-shell/apps/desktop/src-tauri/Cargo.lock
+          sha256sum "$RUNNER_TEMP/prime-shell-authoritative.zip"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate contracts
+        run: pnpm contract:test
+
+      - name: Typecheck frontend
+        run: pnpm typecheck
+
+      - name: Lint frontend
+        run: pnpm lint
+
+      - name: Test frontend
+        run: pnpm test
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Test Python sidecar protocol
+        run: pnpm sidecar:test
+
+      - name: Create pinned Python build environment
+        run: |
+          python3 -m venv .venv-build
+          .venv-build/bin/python -m pip install --no-input -r services/python-backend/requirements-build.lock
+
+      - name: Build packaged Python sidecar
+        run: pnpm sidecar:build
+
+      - name: Verify packaged Unicode echo
+        run: pnpm sidecar:verify
+
+      - name: Check Rust formatting
+        working-directory: fresh-source/prime-shell/apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      - name: Lint Rust
+        working-directory: fresh-source/prime-shell/apps/desktop/src-tauri
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Test Rust
+        working-directory: fresh-source/prime-shell/apps/desktop/src-tauri
+        env:
+          PRIME_SHELL_PACKAGED_SIDECAR: ../../../services/python-backend/dist/sidecar/linux-x86_64/prime-shell-python-backend/prime-shell-python-backend
+        run: cargo test --locked -- --include-ignored
+
+      - name: Build Tauri release
+        run: xvfb-run -a pnpm --filter @prime-shell/desktop tauri build --bundles deb -- --locked
+
+      - name: Verify native Tauri runtime
+        run: pnpm native:verify

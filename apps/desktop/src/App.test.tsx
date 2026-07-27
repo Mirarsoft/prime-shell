@@ -1,0 +1,82 @@
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import App from "./App";
+
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+
+beforeEach(() => {
+  invoke.mockReset();
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+});
+
+afterEach(cleanup);
+
+describe("Unicode echo UI", () => {
+  it("renders the real command result", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "backend_status") {
+        return Promise.resolve({ ready: true, backendVersion: "0.1.0" });
+      }
+      if (command === "runtime_probe_config") {
+        return Promise.resolve({ enabled: false, evidencePath: null });
+      }
+      if (command === "echo_text") {
+        return Promise.resolve({ text: "مرحبا 👋", traceId: "trace-1" });
+      }
+      return Promise.reject(new Error(`Unexpected command: ${command}`));
+    });
+
+    render(<App />);
+    await screen.findByText("Backend: Ready");
+
+    const input = screen.getByLabelText("Unicode text");
+    await userEvent.clear(input);
+    await userEvent.type(input, "مرحبا 👋");
+    await userEvent.click(screen.getByRole("button", { name: "Echo" }));
+
+    expect(await screen.findByText("مرحبا 👋")).toBeInTheDocument();
+    expect(invoke).toHaveBeenLastCalledWith("echo_text", {
+      text: "مرحبا 👋",
+    });
+  });
+
+  it("shows a bounded safe error", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "backend_status") {
+        return Promise.resolve({ ready: true, backendVersion: "0.1.0" });
+      }
+      if (command === "runtime_probe_config") {
+        return Promise.resolve({ enabled: false, evidencePath: null });
+      }
+      if (command === "echo_text") {
+        return Promise.reject({
+          code: "BACKEND_UNAVAILABLE",
+          message: "Backend unavailable.",
+          traceId: "trace-2",
+        });
+      }
+      return Promise.reject({
+        code: "BACKEND_UNAVAILABLE",
+        message: `Unexpected command: ${command}`,
+        traceId: "trace-2",
+      });
+    });
+
+    render(<App />);
+    await screen.findByText("Backend: Ready");
+    await userEvent.click(screen.getByRole("button", { name: "Echo" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Backend unavailable.",
+      ),
+    );
+  });
+});

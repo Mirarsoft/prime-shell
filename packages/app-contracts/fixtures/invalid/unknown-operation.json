@@ -1,0 +1,9 @@
+{
+  "protocol": "generic-app",
+  "kind": "request",
+  "requestId": "request-2",
+  "traceId": "trace-2",
+  "operation": "spike.future",
+  "payload": {}
+}
+
