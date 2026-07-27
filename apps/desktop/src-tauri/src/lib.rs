@@ -1,18 +1,29 @@
 pub mod backend;
 
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Mutex,
+use std::{
+    env, fs,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
 };
 
 use backend::{AppError, AppResult, BackendClient, BackendStatus, EchoResponse, LaunchSpec};
-use tauri::{Manager, State};
+use serde::Serialize;
+use tauri::{AppHandle, Manager, State};
 
 struct BackendState {
     client: Mutex<Option<BackendClient>>,
 }
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeProbeConfig {
+    enabled: bool,
+    evidence_path: Option<String>,
+}
 
 #[tauri::command]
 fn backend_status(state: State<'_, BackendState>) -> AppResult<BackendStatus> {
@@ -44,6 +55,35 @@ fn echo_text(text: String, state: State<'_, BackendState>) -> AppResult<EchoResp
         .echo(&text, &request_id, &trace_id)
 }
 
+#[tauri::command]
+fn runtime_probe_config() -> RuntimeProbeConfig {
+    let enabled = env::var_os("PRIME_SHELL_NATIVE_RUNTIME_VERIFY").is_some();
+    RuntimeProbeConfig {
+        enabled,
+        evidence_path: env::var("PRIME_SHELL_RUNTIME_EVIDENCE").ok(),
+    }
+}
+
+#[tauri::command]
+fn write_runtime_evidence(
+    evidence: serde_json::Value,
+    app: AppHandle,
+) -> AppResult<()> {
+    let trace = "runtime-evidence";
+    if env::var_os("PRIME_SHELL_NATIVE_RUNTIME_VERIFY").is_none() {
+        return Err(AppError::validation(
+            "Native runtime verification is disabled.",
+            trace,
+        ));
+    }
+    let path = env::var("PRIME_SHELL_RUNTIME_EVIDENCE")
+        .map_err(|_| AppError::validation("Runtime evidence path is not configured.", trace))?;
+    let bytes = serde_json::to_vec_pretty(&evidence).map_err(|_| AppError::internal(trace))?;
+    fs::write(path, bytes).map_err(|_| AppError::io(trace))?;
+    app.exit(0);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -56,7 +96,12 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_status, echo_text])
+        .invoke_handler(tauri::generate_handler![
+            backend_status,
+            echo_text,
+            runtime_probe_config,
+            write_runtime_evidence
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Prime Shell Echo Spike");
 }
