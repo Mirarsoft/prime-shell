@@ -1,0 +1,11 @@
+{
+  "protocol": "generic-app",
+  "kind": "result",
+  "requestId": "request-1",
+  "traceId": "trace-1",
+  "operation": "spike.echo",
+  "payload": {
+    "text": "Hello — مرحبا — こんにちは 👋"
+  }
+}
+
