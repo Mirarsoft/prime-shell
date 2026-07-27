@@ -5,7 +5,10 @@ import App from "./App";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke,
+  isTauri: () => false,
+}));
 
 beforeEach(() => {
   invoke.mockReset();

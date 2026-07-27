@@ -11,6 +11,7 @@ import {
   webDarkTheme,
   webLightTheme,
 } from "@fluentui/react-components";
+import { isTauri } from "@tauri-apps/api/core";
 import {
   echoText,
   getBackendStatus,
@@ -72,6 +73,9 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
     if (runtimeProbeStarted.current) {
       return;
     }
