@@ -24,7 +24,12 @@ export const echoResponseSchema = z.object({
   traceId: z.string().min(1).max(128),
 });
 
+export const runtimeProbeConfigSchema = z.object({
+  enabled: z.boolean(),
+  evidencePath: z.string().nullable(),
+});
+
 export type AppError = z.infer<typeof appErrorSchema>;
 export type BackendStatus = z.infer<typeof backendStatusSchema>;
 export type EchoResponse = z.infer<typeof echoResponseSchema>;
-
+export type RuntimeProbeConfig = z.infer<typeof runtimeProbeConfigSchema>;
