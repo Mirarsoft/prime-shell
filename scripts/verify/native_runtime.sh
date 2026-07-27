@@ -14,16 +14,17 @@ if [[ -z "$DEB_PATH" || ! -f "$DEB_PATH" ]]; then
   exit 1
 fi
 
+PACKAGE_NAME="$(dpkg-deb -f "$DEB_PATH" Package)"
+sudo apt-get install -y "$DEB_PATH"
+
 APP_BINARY="$(
-  dpkg-deb -c "$DEB_PATH" |
-    awk '$6 ~ /^\.\// && $6 ~ /\/usr\/bin\/[^/]+$/ { sub(/^\./, "", $6); print $6; exit }'
+  dpkg-query -L "$PACKAGE_NAME" |
+    awk '$0 ~ /^\/usr\/bin\/[^/]+$/ { print; exit }'
 )"
 if [[ -z "$APP_BINARY" ]]; then
-  echo "Could not locate installed app binary in deb bundle." >&2
+  echo "Could not locate installed app binary for package $PACKAGE_NAME." >&2
   exit 1
 fi
-
-sudo apt-get install -y "$DEB_PATH"
 
 rm -f "$EVIDENCE_FILE"
 timeout 45s xvfb-run -a env \
