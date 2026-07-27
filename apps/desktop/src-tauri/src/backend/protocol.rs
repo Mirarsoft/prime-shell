@@ -102,10 +102,16 @@ pub fn validate_hello(
 ) -> AppResult<()> {
     let trace = "backend-handshake";
     if hello.protocol != "generic-app" || hello.kind != "hello" {
-        return Err(AppError::mismatch("Backend protocol identity mismatch.", trace));
+        return Err(AppError::mismatch(
+            "Backend protocol identity mismatch.",
+            trace,
+        ));
     }
     if hello.protocol_min > 1 || hello.protocol_max < 1 {
-        return Err(AppError::mismatch("Backend protocol range mismatch.", trace));
+        return Err(AppError::mismatch(
+            "Backend protocol range mismatch.",
+            trace,
+        ));
     }
     if hello.backend_version != manifest.backend_version
         || hello.build_id != manifest.build_id
@@ -113,11 +119,12 @@ pub fn validate_hello(
         || hello.target_triple != manifest.target_triple
         || hello.schema_hash != expected_schema_hash
     {
-        return Err(AppError::mismatch("Packaged backend identity mismatch.", trace));
+        return Err(AppError::mismatch(
+            "Packaged backend identity mismatch.",
+            trace,
+        ));
     }
-    if hello.python_version.is_empty()
-        || hello.supported_operations != ["spike.echo".to_owned()]
-    {
+    if hello.python_version.is_empty() || hello.supported_operations != ["spike.echo".to_owned()] {
         return Err(AppError::mismatch(
             "Packaged backend capabilities mismatch.",
             trace,
@@ -135,9 +142,8 @@ mod tests {
             backend_version: "0.1.0".to_owned(),
             build_id: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_owned(),
-            schema_hash:
-                "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-                    .to_owned(),
+            schema_hash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                .to_owned(),
             target_triple: "linux-x86_64".to_owned(),
             bundle_bytes: 1,
             files: vec![],
