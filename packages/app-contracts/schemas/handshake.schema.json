@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prime-shell.local/schemas/handshake.schema.json",
+  "title": "Prime Shell Backend Hello",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "kind",
+    "protocolMin",
+    "protocolMax",
+    "backendVersion",
+    "buildId",
+    "targetTriple",
+    "pythonVersion",
+    "schemaHash",
+    "supportedOperations"
+  ],
+  "properties": {
+    "protocol": { "const": "generic-app" },
+    "kind": { "const": "hello" },
+    "protocolMin": { "type": "integer", "minimum": 1 },
+    "protocolMax": { "type": "integer", "minimum": 1 },
+    "backendVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "buildId": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "targetTriple": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "pythonVersion": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "schemaHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "supportedOperations": {
+      "type": "array",
+      "prefixItems": [{ "const": "spike.echo" }],
+      "items": false,
+      "minItems": 1,
+      "maxItems": 1
+    }
+  }
+}
+
