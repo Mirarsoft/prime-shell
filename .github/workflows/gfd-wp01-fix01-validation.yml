@@ -72,19 +72,33 @@ jobs:
       - name: Verify packaged Unicode echo
         run: pnpm sidecar:verify
 
+      - name: Generate Rust lockfile
+        working-directory: apps/desktop/src-tauri
+        run: cargo generate-lockfile
+
+      - name: Upload Rust lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp01-cargo-lock
+          path: apps/desktop/src-tauri/Cargo.lock
+          if-no-files-found: error
+
       - name: Check Rust formatting
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --check
 
       - name: Lint Rust
         working-directory: apps/desktop/src-tauri
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Test Rust
         working-directory: apps/desktop/src-tauri
         env:
           PRIME_SHELL_PACKAGED_SIDECAR: ../../../services/python-backend/dist/sidecar/linux-x86_64/prime-shell-python-backend/prime-shell-python-backend
-        run: cargo test -- --include-ignored
+        run: cargo test --locked -- --include-ignored
 
       - name: Build Tauri release
         run: xvfb-run -a pnpm --filter @prime-shell/desktop tauri build --bundles deb
+
+      - name: Verify native Tauri runtime
+        run: pnpm native:verify
