@@ -65,10 +65,7 @@ fn runtime_probe_config() -> RuntimeProbeConfig {
 }
 
 #[tauri::command]
-fn write_runtime_evidence(
-    evidence: serde_json::Value,
-    app: AppHandle,
-) -> AppResult<()> {
+fn write_runtime_evidence(evidence: serde_json::Value, app: AppHandle) -> AppResult<()> {
     let trace = "runtime-evidence";
     if env::var_os("PRIME_SHELL_NATIVE_RUNTIME_VERIFY").is_none() {
         return Err(AppError::validation(
