@@ -6,7 +6,7 @@
   "permissions": [
     "core:default",
     "allow-backend-status",
-    "allow-echo-text"
+    "allow-echo-text",
+    "allow-runtime-probe"
   ]
 }
-

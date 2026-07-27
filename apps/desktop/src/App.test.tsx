@@ -5,10 +5,7 @@ import App from "./App";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke,
-  isTauri: () => false,
-}));
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 beforeEach(() => {
   invoke.mockReset();
@@ -23,9 +20,18 @@ afterEach(cleanup);
 
 describe("Unicode echo UI", () => {
   it("renders the real command result", async () => {
-    invoke
-      .mockResolvedValueOnce({ ready: true, backendVersion: "0.1.0" })
-      .mockResolvedValueOnce({ text: "مرحبا 👋", traceId: "trace-1" });
+    invoke.mockImplementation((command: string) => {
+      if (command === "backend_status") {
+        return Promise.resolve({ ready: true, backendVersion: "0.1.0" });
+      }
+      if (command === "runtime_probe_config") {
+        return Promise.resolve({ enabled: false, evidencePath: null });
+      }
+      if (command === "echo_text") {
+        return Promise.resolve({ text: "مرحبا 👋", traceId: "trace-1" });
+      }
+      return Promise.reject(new Error(`Unexpected command: ${command}`));
+    });
 
     render(<App />);
     await screen.findByText("Backend: Ready");
@@ -42,13 +48,26 @@ describe("Unicode echo UI", () => {
   });
 
   it("shows a bounded safe error", async () => {
-    invoke
-      .mockResolvedValueOnce({ ready: true, backendVersion: "0.1.0" })
-      .mockRejectedValueOnce({
+    invoke.mockImplementation((command: string) => {
+      if (command === "backend_status") {
+        return Promise.resolve({ ready: true, backendVersion: "0.1.0" });
+      }
+      if (command === "runtime_probe_config") {
+        return Promise.resolve({ enabled: false, evidencePath: null });
+      }
+      if (command === "echo_text") {
+        return Promise.reject({
+          code: "BACKEND_UNAVAILABLE",
+          message: "Backend unavailable.",
+          traceId: "trace-2",
+        });
+      }
+      return Promise.reject({
         code: "BACKEND_UNAVAILABLE",
-        message: "Backend unavailable.",
+        message: `Unexpected command: ${command}`,
         traceId: "trace-2",
       });
+    });
 
     render(<App />);
     await screen.findByText("Backend: Ready");

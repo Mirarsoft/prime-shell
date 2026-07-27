@@ -8,3 +8,7 @@ identifier = "allow-echo-text"
 description = "Allows the main window to invoke only the typed WP01 Unicode echo command."
 commands.allow = ["echo_text"]
 
+[[permission]]
+identifier = "allow-runtime-probe"
+description = "Allows the environment-gated WP01 native runtime verifier commands."
+commands.allow = ["runtime_probe_config", "write_runtime_evidence"]
