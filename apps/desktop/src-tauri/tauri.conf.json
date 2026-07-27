@@ -29,9 +29,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "icon": [],
     "resources": {
       "../../../services/python-backend/dist/sidecar/": "sidecar/"
     }
   }
 }
-
