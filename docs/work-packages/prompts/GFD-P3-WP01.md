@@ -821,23 +821,23 @@ GFD-P0B-WP03 packaging and validation closure: Accepted and merged, with exact c
 GFD-P1-WP01 technical baseline: Accepted and merged, with exact commit/evidence.
 GFD-P2-WP01 theme and accessibility foundation: Accepted and merged, with exact commit/evidence.
 GFD-P2-WP02 responsive application shell: Accepted and merged, with exact commit/evidence.
-Canonical versioned JSON Schema contracts: Implemented / Partial / Blocked / Not started.
-Shared cross-language valid and invalid fixtures: Implemented / Partial / Blocked / Not started.
-Deterministic TypeScript binding generation or derivation: Implemented / Partial / Blocked / Not started.
-Deterministic Rust binding generation or derivation: Implemented / Partial / Blocked / Not started.
-Deterministic Python binding generation or derivation: Implemented / Partial / Blocked / Not started.
-Contract and registry drift guard: Implemented / Partial / Blocked / Not started.
-Compile-time Rust operation registry: Implemented / Partial / Blocked / Not started.
-Rust authorization before Python dispatch: Implemented / Partial / Blocked / Not started.
-Typed finite Python dispatcher: Implemented / Partial / Blocked / Not started.
-Stable bounded path-free safe errors: Implemented / Partial / Blocked / Not started.
-Rust-owned native picker intent: Implemented / Partial / Blocked / Not started.
-Opaque DocumentRef boundary: Implemented / Partial / Blocked / Not started.
-Opaque ArtifactRef boundary: Implemented / Partial / Blocked / Not started.
-Bounded Rust-owned reference lifecycle: Implemented / Partial / Blocked / Not started.
-Single-writer and atomic persistence behavior: Implemented / Partial / Blocked / Not started.
-Typed frontend intent wrappers: Implemented / Partial / Blocked / Not started.
-Safe bounded UI rendering and accessible states: Implemented / Partial / Blocked / Not started.
+Canonical versioned JSON Schema contracts: Implemented / Partially implemented / Blocked / Not started.
+Shared cross-language valid and invalid fixtures: Implemented / Partially implemented / Blocked / Not started.
+Deterministic TypeScript binding generation or derivation: Implemented / Partially implemented / Blocked / Not started.
+Deterministic Rust binding generation or derivation: Implemented / Partially implemented / Blocked / Not started.
+Deterministic Python binding generation or derivation: Implemented / Partially implemented / Blocked / Not started.
+Contract and registry drift guard: Implemented / Partially implemented / Blocked / Not started.
+Compile-time Rust operation registry: Implemented / Partially implemented / Blocked / Not started.
+Rust authorization before Python dispatch: Implemented / Partially implemented / Blocked / Not started.
+Typed finite Python dispatcher: Implemented / Partially implemented / Blocked / Not started.
+Stable bounded path-free safe errors: Implemented / Partially implemented / Blocked / Not started.
+Rust-owned native picker intent: Implemented / Partially implemented / Blocked / Not started.
+Opaque DocumentRef boundary: Implemented / Partially implemented / Blocked / Not started.
+Opaque ArtifactRef boundary: Implemented / Partially implemented / Blocked / Not started.
+Bounded Rust-owned reference lifecycle: Implemented / Partially implemented / Blocked / Not started.
+Single-writer and atomic persistence behavior: Implemented / Partially implemented / Blocked / Not started.
+Typed frontend intent wrappers: Implemented / Partially implemented / Blocked / Not started.
+Safe bounded UI rendering and accessible states: Implemented / Partially implemented / Blocked / Not started.
 Release CSP and production test-surface exclusion: Passed / Failed / Blocked / Not run.
 TypeScript tests: Passed / Failed / Blocked / Not run.
 Rust tests: Passed / Failed / Blocked / Not run.
@@ -858,23 +858,26 @@ Merge: Not started.
 Branch deletion: Not started.
 ```
 
-Do not compress independent rows into a general claim. `Partial`, `Blocked`,
-and `Not run` require a concise reason and evidence reference.
+Do not compress independent rows into a general claim. `Partially implemented`
+for an implementation row, `Partial` for an evidence row, `Blocked`, and
+`Not run` require a concise reason and evidence reference.
 
 ## 15. One `RUN_ID` and collision-resistant external naming
 
-After the final source state and implementation commit are fixed, create one
-UTC run ID in basic ISO-8601 form:
+At the start of the future implementation task, after the mandatory authority
+reads and preflight but before any repository or deliverable write, create
+exactly one UTC run ID in basic ISO-8601 form:
 
 ```text
 YYYYMMDDTHHMMSSZ
 ```
 
-Use that same run ID for every external deliverable. Never use a branch name,
-mutable label, local time, random suffix, or a second timestamp in the same
-handoff. Before writing, verify that none of the four target names already
-exists in the destination. If any collision exists, generate one later run ID
-and use it consistently for all four names.
+Resolve all four target filenames immediately from that one run ID and reuse
+it unchanged for every implementation deliverable. Never generate or
+substitute a second run ID, timestamp, branch name, mutable label, local time,
+or random suffix in the same task. Before any write, verify that none of the
+four resolved target names exists in the destination. A collision is a stop
+condition: report `Blocked` without generating another run ID.
 
 The run ID identifies the evidence set, not the implementation version. The
 manifest must record the exact reviewed commit, tree, parent, branch, source
@@ -941,10 +944,13 @@ Record:
 - Record source snapshot root, reviewed commit, tree, parent, branch, run ID,
   and generation commands.
 - Record ordinary SHA-256 for the other three files and the archive.
-- If the manifest records its own digest, use the canonical self-hash
-  convention from `shared-ground-rules.md`: hash the final manifest bytes
-  after replacing only the self-digest value with the literal
-  `SELF_SHA256`, record the resulting value, and verify reproduction.
+- If the manifest records its own digest, designate exactly one self-digest
+  value. To compute it, copy the final manifest bytes, replace only that
+  self-digest value with the literal `<SELF_SHA256>`, and compute SHA-256 over
+  those canonical bytes. Record the resulting lowercase hexadecimal digest in
+  the designated value, then reproduce the hash by repeating only that
+  replacement; do not alter the field label, spacing, line endings, or any
+  other byte.
 - After finalization, recompute every digest and verify no deliverable changed.
 - Never include credentials, secrets, native paths, or sensitive user content.
 
