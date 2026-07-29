@@ -113,6 +113,11 @@ impl BackendClient {
 
         let mut child = command.spawn().map_err(|_| AppError::unavailable(trace))?;
         let pid = child.id();
+        if let Err(error) = record_forced_close_process_id(pid) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
         let stdin = child.stdin.take().ok_or_else(|| AppError::io(trace))?;
         let stdout = child.stdout.take().ok_or_else(|| AppError::io(trace))?;
         let stderr = child.stderr.take().ok_or_else(|| AppError::io(trace))?;
@@ -151,7 +156,6 @@ impl BackendClient {
         let hello: Hello = serde_json::from_slice(&hello_frame)
             .map_err(|_| AppError::mismatch("Backend hello is malformed.", trace))?;
         validate_hello(&hello, &manifest, env!("PRIME_SHELL_SCHEMA_HASH"))?;
-        record_forced_close_process_id(pid)?;
 
         Ok(Self {
             child,

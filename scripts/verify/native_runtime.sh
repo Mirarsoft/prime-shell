@@ -138,7 +138,7 @@ xvfb-run -a bash -c '
   "$FORCED_SIDECAR_PID_FILE" &
 FORCED_WRAPPER_PID=$!
 
-for _ in $(seq 1 100); do
+for _ in $(seq 1 300); do
   if [[ -s "$FORCED_HOST_PID_FILE" && -s "$FORCED_SIDECAR_PID_FILE" ]]; then
     break
   fi
