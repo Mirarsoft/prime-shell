@@ -128,6 +128,8 @@ inconsistent, stop before writing. Do not conduct a broad architecture review.
 **Direct package prerequisite:** Accepted, merged Phase 0B WP01/FIX01 at the
 activation base.
 
+**Direct dependent:** `GFD-P0B-WP03`.
+
 **Authoring-time accepted predecessor commits:**
 
 - accepted WP01 implementation head before squash merge:

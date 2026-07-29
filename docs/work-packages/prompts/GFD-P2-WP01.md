@@ -159,6 +159,8 @@ new support claims.
 
 **Direct package prerequisite:** Accepted and merged `GFD-P1-WP01` baseline.
 
+**Direct dependent:** `GFD-P2-WP02`.
+
 **Inherited predecessors:** Accepted and merged WP01/FIX01,
 `GFD-P0B-WP02`, and `GFD-P0B-WP03`.
 

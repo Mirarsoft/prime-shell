@@ -159,6 +159,8 @@ or rerun Phase 0B as a substitute for accepted predecessor evidence.
 **Direct package prerequisite:** Accepted and merged `GFD-P0B-WP03` spike
 closure.
 
+**Direct dependent:** `GFD-P2-WP01`.
+
 **Inherited predecessors:** Accepted and merged WP01/FIX01 and
 `GFD-P0B-WP02`.
 

@@ -39,8 +39,9 @@ Only these implementation-status labels are valid throughout the prompt pack:
 | `GFD-P8-WP01` | Phase 8 | Template Extraction and Second Branded Application | `Not started` | GPT-5.6 Sol / High |
 
 The package IDs and order above must match
-[`dependency-matrix.md`](dependency-matrix.md). Package prompts do not exist
-yet and may be authored only through the controlled Stage 2 workflow.
+[`dependency-matrix.md`](dependency-matrix.md). At Stage 1 acceptance, package
+prompts did not yet exist. All fourteen were subsequently authored only through
+the controlled Stage 2 workflow and remain provisional and non-executable.
 
 ## 3. Phase 0B completion packages
 

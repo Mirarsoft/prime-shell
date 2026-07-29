@@ -177,6 +177,8 @@ new support, title-bar, persistence, or platform claims.
 **Direct package prerequisite:** Accepted and merged `GFD-P2-WP01` theme,
 tokens, and accessibility foundation.
 
+**Direct dependent:** `GFD-P3-WP01`.
+
 **Inherited predecessors:** Accepted and merged WP01/FIX01,
 `GFD-P0B-WP02`, `GFD-P0B-WP03`, and `GFD-P1-WP01`.
 

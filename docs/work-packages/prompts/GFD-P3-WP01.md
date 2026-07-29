@@ -187,6 +187,8 @@ new product, platform, picker, persistence, or support claims.
 **Direct package prerequisite:** Accepted and merged `GFD-P2-WP02`
 responsive application shell.
 
+**Direct dependent:** `GFD-P3-WP02`.
+
 **Inherited predecessors:** Accepted and merged WP01/FIX01,
 `GFD-P0B-WP02`, `GFD-P0B-WP03`, `GFD-P1-WP01`, and `GFD-P2-WP01`.
 

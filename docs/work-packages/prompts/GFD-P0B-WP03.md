@@ -141,6 +141,8 @@ inconsistent, stop before writing. Do not conduct a broad architecture review.
 
 **Direct package prerequisite:** Accepted and merged `GFD-P0B-WP02`.
 
+**Direct dependent:** `GFD-P1-WP01`.
+
 **Inherited predecessor:** Accepted and merged WP01/FIX01.
 
 **Authoring-time accepted WP01 commits:**
