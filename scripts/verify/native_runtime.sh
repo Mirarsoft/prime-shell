@@ -115,49 +115,60 @@ fi
 
 echo '{"sidecarProcessesAfterNativeClose":0}'
 
-FORCED_PID_FILE="$EVIDENCE_DIR/forced-host.pid"
-rm -f "$FORCED_PID_FILE" "$PROCESS_EVIDENCE_FILE"
+FORCED_HOST_PID_FILE="$EVIDENCE_DIR/forced-host.pid"
+FORCED_SIDECAR_PID_FILE="$EVIDENCE_DIR/forced-sidecar.pid"
+rm -f \
+  "$FORCED_HOST_PID_FILE" \
+  "$FORCED_SIDECAR_PID_FILE" \
+  "$PROCESS_EVIDENCE_FILE"
 xvfb-run -a bash -c '
   app_binary="$1"
-  pid_file="$2"
-  "$app_binary" &
+  host_pid_file="$2"
+  sidecar_pid_file="$3"
+  env \
+    PRIME_SHELL_NATIVE_FORCED_CLOSE_VERIFY=1 \
+    PRIME_SHELL_FORCED_CLOSE_SIDECAR_PID_FILE="$sidecar_pid_file" \
+    "$app_binary" &
   app_pid=$!
-  printf "%s\n" "$app_pid" >"$pid_file"
+  printf "%s\n" "$app_pid" >"$host_pid_file"
   wait "$app_pid"
-' bash "$APP_BINARY" "$FORCED_PID_FILE" &
+' bash \
+  "$APP_BINARY" \
+  "$FORCED_HOST_PID_FILE" \
+  "$FORCED_SIDECAR_PID_FILE" &
 FORCED_WRAPPER_PID=$!
 
 for _ in $(seq 1 100); do
-  if [[ -s "$FORCED_PID_FILE" ]]; then
-    FORCED_APP_PID="$(cat "$FORCED_PID_FILE")"
-    if pgrep -P "$FORCED_APP_PID" -f 'prime-shell-python-backend' >/dev/null; then
-      break
-    fi
+  if [[ -s "$FORCED_HOST_PID_FILE" && -s "$FORCED_SIDECAR_PID_FILE" ]]; then
+    break
   fi
   sleep 0.1
 done
 
-if [[ ! -s "$FORCED_PID_FILE" ]]; then
+if [[ ! -s "$FORCED_HOST_PID_FILE" ]]; then
   kill "$FORCED_WRAPPER_PID" 2>/dev/null || true
   wait "$FORCED_WRAPPER_PID" 2>/dev/null || true
   echo "Forced-close native host PID was not recorded." >&2
   exit 1
 fi
 
-FORCED_APP_PID="$(cat "$FORCED_PID_FILE")"
-FORCED_SIDECAR_PIDS="$(
-  pgrep -P "$FORCED_APP_PID" -f 'prime-shell-python-backend' || true
-)"
-SIDECAR_BEFORE_FORCED_CLOSE="$(
-  printf '%s\n' "$FORCED_SIDECAR_PIDS" | sed '/^$/d' | wc -l
-)"
-if [[ "$SIDECAR_BEFORE_FORCED_CLOSE" -ne 1 ]]; then
+FORCED_APP_PID="$(cat "$FORCED_HOST_PID_FILE")"
+if [[ ! -s "$FORCED_SIDECAR_PID_FILE" ]]; then
   kill "$FORCED_APP_PID" "$FORCED_WRAPPER_PID" 2>/dev/null || true
   wait "$FORCED_WRAPPER_PID" 2>/dev/null || true
-  echo "Expected exactly one sidecar before forced native-host close." >&2
+  echo "Forced-close sidecar PID was not recorded." >&2
   exit 1
 fi
-FORCED_SIDECAR_PID="$FORCED_SIDECAR_PIDS"
+
+FORCED_SIDECAR_PID="$(cat "$FORCED_SIDECAR_PID_FILE")"
+if [[ ! "$FORCED_SIDECAR_PID" =~ ^[0-9]+$ ]] ||
+  ! kill -0 "$FORCED_SIDECAR_PID" 2>/dev/null; then
+  kill "$FORCED_APP_PID" "$FORCED_WRAPPER_PID" 2>/dev/null || true
+  wait "$FORCED_WRAPPER_PID" 2>/dev/null || true
+  echo "Recorded forced-close sidecar PID is not active." >&2
+  exit 1
+fi
+SIDECAR_BEFORE_FORCED_CLOSE=1
 
 kill -KILL "$FORCED_APP_PID"
 for _ in $(seq 1 30); do

@@ -151,6 +151,7 @@ impl BackendClient {
         let hello: Hello = serde_json::from_slice(&hello_frame)
             .map_err(|_| AppError::mismatch("Backend hello is malformed.", trace))?;
         validate_hello(&hello, &manifest, env!("PRIME_SHELL_SCHEMA_HASH"))?;
+        record_forced_close_process_id(pid)?;
 
         Ok(Self {
             child,
@@ -291,6 +292,19 @@ impl BackendClient {
             .map_err(|_| AppError::crashed(trace_id))?;
         stdin.flush().map_err(|_| AppError::crashed(trace_id))
     }
+}
+
+fn record_forced_close_process_id(pid: u32) -> AppResult<()> {
+    if env::var_os("PRIME_SHELL_NATIVE_FORCED_CLOSE_VERIFY").is_none() {
+        return Ok(());
+    }
+    let path = env::var_os("PRIME_SHELL_FORCED_CLOSE_SIDECAR_PID_FILE").ok_or_else(|| {
+        AppError::validation(
+            "Forced-close sidecar PID evidence path is not configured.",
+            "backend-launch",
+        )
+    })?;
+    fs::write(path, format!("{pid}\n")).map_err(|_| AppError::io("backend-launch"))
 }
 
 impl Drop for BackendClient {
