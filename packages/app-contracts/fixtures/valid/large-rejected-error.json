@@ -1,0 +1,10 @@
+{
+  "protocol": "generic-app",
+  "kind": "error",
+  "requestId": "request-large-1",
+  "traceId": "trace-large-1",
+  "error": {
+    "code": "RESOURCE_EXHAUSTED",
+    "message": "The requested payload exceeds the configured protocol limit."
+  }
+}

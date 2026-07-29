@@ -1,0 +1,8 @@
+{
+  "protocol": "generic-app",
+  "kind": "cancel",
+  "requestId": "request-cancel-invalid",
+  "traceId": "trace-cancel-invalid",
+  "taskId": "task-count-1",
+  "operation": "spike.count"
+}

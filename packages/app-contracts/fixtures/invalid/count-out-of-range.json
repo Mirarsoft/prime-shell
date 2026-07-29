@@ -1,0 +1,11 @@
+{
+  "protocol": "generic-app",
+  "kind": "request",
+  "requestId": "request-count-invalid",
+  "traceId": "trace-count-invalid",
+  "operation": "spike.count",
+  "payload": {
+    "countTo": 0,
+    "intervalMs": 25
+  }
+}

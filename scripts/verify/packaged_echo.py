@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
 def sidecar_executable() -> Path:
     output = subprocess.check_output(
         [sys.executable, str(ROOT / "scripts" / "verify" / "sidecar_path.py")],
@@ -63,7 +65,13 @@ def main() -> int:
     hello = read_frame(process.stdout, 64 * 1024)
     handshake_ms = round((time.monotonic() - started) * 1000, 3)
     assert hello["kind"] == "hello"
-    assert hello["supportedOperations"] == ["spike.echo"]
+    assert hello["supportedOperations"] == [
+        "spike.echo",
+        "spike.count",
+        "spike.crash",
+        "spike.hang",
+        "spike.largeRejected",
+    ]
     for field in ("buildId", "schemaHash", "targetTriple"):
         assert hello[field] == manifest[field]
 
@@ -82,6 +90,78 @@ def main() -> int:
     result = read_frame(process.stdout, 1024 * 1024)
     assert result["kind"] == "result"
     assert result["payload"]["text"] == text
+
+    send(
+        process,
+        {
+            "protocol": "generic-app",
+            "kind": "request",
+            "requestId": "packaged-count-1",
+            "traceId": "packaged-count-trace-1",
+            "operation": "spike.count",
+            "payload": {"countTo": 3, "intervalMs": 10},
+        },
+    )
+    count_accepted = read_frame(process.stdout, 1024 * 1024)
+    assert count_accepted["kind"] == "accepted"
+    count_events = [read_frame(process.stdout, 1024 * 1024) for _ in range(4)]
+    assert [event["sequence"] for event in count_events] == [1, 2, 3, 4]
+    assert [event["progress"]["current"] for event in count_events[:3]] == [1, 2, 3]
+    assert count_events[-1]["state"] == "Succeeded"
+    assert (
+        sum(
+            event["state"] in {"Succeeded", "Failed", "Cancelled"}
+            for event in count_events
+        )
+        == 1
+    )
+
+    send(
+        process,
+        {
+            "protocol": "generic-app",
+            "kind": "request",
+            "requestId": "packaged-count-2",
+            "traceId": "packaged-count-trace-2",
+            "operation": "spike.count",
+            "payload": {"countTo": 100, "intervalMs": 100},
+        },
+    )
+    cancel_accepted = read_frame(process.stdout, 1024 * 1024)
+    cancel_started = time.monotonic()
+    send(
+        process,
+        {
+            "protocol": "generic-app",
+            "kind": "cancel",
+            "requestId": "packaged-cancel-1",
+            "traceId": "packaged-cancel-trace-1",
+            "taskId": cancel_accepted["taskId"],
+        },
+    )
+    cancel_ack = read_frame(process.stdout, 1024 * 1024)
+    cancel_ack_ms = round((time.monotonic() - cancel_started) * 1000, 3)
+    assert cancel_ack["kind"] == "cancelAck"
+    assert cancel_ack["accepted"] is True
+    assert cancel_ack_ms <= 250
+    cancelled = read_frame(process.stdout, 1024 * 1024)
+    assert cancelled["kind"] == "taskEvent"
+    assert cancelled["state"] == "Cancelled"
+
+    send(
+        process,
+        {
+            "protocol": "generic-app",
+            "kind": "request",
+            "requestId": "packaged-large-1",
+            "traceId": "packaged-large-trace-1",
+            "operation": "spike.largeRejected",
+            "payload": {"requestedBytes": 1024 * 1024 + 1},
+        },
+    )
+    large_rejected = read_frame(process.stdout, 1024 * 1024)
+    assert large_rejected["kind"] == "error"
+    assert large_rejected["error"]["code"] == "RESOURCE_EXHAUSTED"
 
     send(
         process,
@@ -136,6 +216,14 @@ def main() -> int:
                 "schemaHash": manifest["schemaHash"],
                 "targetTriple": manifest["targetTriple"],
                 "unicodeEcho": "passed",
+                "countProgress": "passed",
+                "countSequences": [
+                    event["sequence"] for event in count_events
+                ],
+                "countTerminal": count_events[-1]["state"],
+                "cancelAcknowledgementMs": cancel_ack_ms,
+                "cancelTerminal": cancelled["state"],
+                "largeRejected": "passed",
                 "unknownOperation": "rejected",
                 "malformedFrame": "rejected",
                 "oversizedFrame": "rejected",

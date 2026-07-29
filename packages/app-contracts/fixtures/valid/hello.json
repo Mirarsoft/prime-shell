@@ -8,6 +8,11 @@
   "targetTriple": "linux-x86_64",
   "pythonVersion": "3.12.13",
   "schemaHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "supportedOperations": ["spike.echo"]
+  "supportedOperations": [
+    "spike.echo",
+    "spike.count",
+    "spike.crash",
+    "spike.hang",
+    "spike.largeRejected"
+  ]
 }
-

@@ -1,0 +1,8 @@
+{
+  "state": "Busy",
+  "backendVersion": "0.1.0",
+  "restartCount": 0,
+  "circuitOpen": false,
+  "activeTaskId": "task-count-1",
+  "lastError": null
+}

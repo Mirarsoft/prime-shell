@@ -9,13 +9,15 @@ use std::{
 };
 
 use serde::Serialize;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use super::{
     error::{AppError, AppResult},
     protocol::{
-        validate_hello, BackendStatus, BundleManifest, EchoPayload, EchoResponse, Hello,
-        RequestEnvelope, ResponseEnvelope, FRAME_MAX_BYTES, HANDSHAKE_MAX_BYTES,
+        validate_hello, BundleManifest, CancelEnvelope, EchoResponse, Hello, RequestEnvelope,
+        BACKEND_EVENT_MAX, FRAME_MAX_BYTES, HANDSHAKE_MAX_BYTES, LOG_MAX_BYTES,
+        TEXT_MAX_CHARACTERS,
     },
     registry::BackendOperation,
 };
@@ -23,6 +25,7 @@ use super::{
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+const FORCE_TERM_TIMEOUT: Duration = Duration::from_millis(250);
 
 #[derive(Debug)]
 enum FrameReadError {
@@ -31,6 +34,7 @@ enum FrameReadError {
     TooLarge,
 }
 
+#[derive(Clone)]
 pub struct LaunchSpec {
     executable: PathBuf,
     target_root: PathBuf,
@@ -65,7 +69,10 @@ pub struct BackendClient {
     child: Child,
     stdin: Option<ChildStdin>,
     frames: Receiver<Result<Vec<u8>, FrameReadError>>,
+    _logs: Receiver<Vec<u8>>,
     backend_version: String,
+    pid: u32,
+    terminated: bool,
 }
 
 impl BackendClient {
@@ -102,13 +109,15 @@ impl BackendClient {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         apply_minimal_environment(&mut command);
+        configure_process_containment(&mut command);
 
         let mut child = command.spawn().map_err(|_| AppError::unavailable(trace))?;
+        let pid = child.id();
         let stdin = child.stdin.take().ok_or_else(|| AppError::io(trace))?;
         let stdout = child.stdout.take().ok_or_else(|| AppError::io(trace))?;
         let stderr = child.stderr.take().ok_or_else(|| AppError::io(trace))?;
 
-        let (sender, frames) = mpsc::sync_channel(64);
+        let (sender, frames) = mpsc::sync_channel(BACKEND_EVENT_MAX);
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             let mut first = true;
@@ -127,13 +136,11 @@ impl BackendClient {
             }
         });
 
+        let (log_sender, logs) = mpsc::sync_channel(BACKEND_EVENT_MAX);
         thread::spawn(move || {
             let mut reader = BufReader::new(stderr);
-            let mut chunk = [0_u8; 8192];
-            while let Ok(count) = reader.read(&mut chunk) {
-                if count == 0 {
-                    break;
-                }
+            while let Some(line) = read_bounded_log_line(&mut reader, LOG_MAX_BYTES) {
+                let _ = log_sender.try_send(line);
             }
         });
 
@@ -149,14 +156,59 @@ impl BackendClient {
             child,
             stdin: Some(stdin),
             frames,
+            _logs: logs,
             backend_version: hello.backend_version,
+            pid,
+            terminated: false,
         })
     }
 
-    pub fn status(&self) -> BackendStatus {
-        BackendStatus {
-            ready: true,
-            backend_version: Some(self.backend_version.clone()),
+    pub fn backend_version(&self) -> &str {
+        &self.backend_version
+    }
+
+    pub fn send_request(
+        &mut self,
+        operation: BackendOperation,
+        payload: &Value,
+        request_id: &str,
+        trace_id: &str,
+    ) -> AppResult<()> {
+        let request = RequestEnvelope {
+            protocol: "generic-app",
+            kind: "request",
+            request_id,
+            trace_id,
+            operation: operation.name(),
+            payload,
+        };
+        self.write_frame(&request, trace_id)
+    }
+
+    pub fn send_cancel(
+        &mut self,
+        task_id: &str,
+        request_id: &str,
+        trace_id: &str,
+    ) -> AppResult<()> {
+        let request = CancelEnvelope {
+            protocol: "generic-app",
+            kind: "cancel",
+            request_id,
+            trace_id,
+            task_id,
+        };
+        self.write_frame(&request, trace_id)
+    }
+
+    pub fn receive(&mut self, timeout: Duration, trace_id: &str) -> AppResult<Option<Value>> {
+        match self.frames.recv_timeout(timeout) {
+            Ok(Ok(frame)) => serde_json::from_slice(&frame)
+                .map(Some)
+                .map_err(|_| AppError::protocol("Backend response is malformed.", trace_id)),
+            Ok(Err(error)) => Err(map_frame_error(error, trace_id)),
+            Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(AppError::crashed(trace_id)),
         }
     }
 
@@ -166,28 +218,61 @@ impl BackendClient {
         request_id: &str,
         trace_id: &str,
     ) -> AppResult<EchoResponse> {
-        if text.chars().count() > super::protocol::TEXT_MAX_CHARACTERS {
+        if text.chars().count() > TEXT_MAX_CHARACTERS {
             return Err(AppError::exhausted(trace_id));
         }
         let operation = BackendOperation::authorize("spike.echo", trace_id)?;
-        let request = RequestEnvelope {
-            protocol: "generic-app",
-            kind: "request",
-            request_id,
-            trace_id,
-            operation: operation.name(),
-            payload: EchoPayload { text },
-        };
-        self.write_frame(&request, trace_id)?;
-
+        let payload = json!({ "text": text });
+        self.send_request(operation, &payload, request_id, trace_id)?;
         let frame = self
-            .frames
-            .recv_timeout(REQUEST_TIMEOUT)
-            .map_err(|_| AppError::unavailable(trace_id))?
-            .map_err(|error| map_frame_error(error, trace_id))?;
-        let response: ResponseEnvelope = serde_json::from_slice(&frame)
-            .map_err(|_| AppError::protocol("Backend response is malformed.", trace_id))?;
-        validate_response(response, request_id, trace_id)
+            .receive(REQUEST_TIMEOUT, trace_id)?
+            .ok_or_else(|| AppError::timeout(trace_id))?;
+        validate_echo_response(frame, request_id, trace_id)
+    }
+
+    pub fn terminate_now(&mut self) {
+        if self.terminated {
+            return;
+        }
+        self.stdin.take();
+        signal_process_tree(self.pid, 15);
+        let deadline = Instant::now() + FORCE_TERM_TIMEOUT;
+        while Instant::now() < deadline {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => thread::sleep(Duration::from_millis(10)),
+                Err(_) => break,
+            }
+        }
+        signal_process_tree(self.pid, 9);
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        self.terminated = true;
+    }
+
+    pub fn shutdown(&mut self) {
+        if self.terminated {
+            return;
+        }
+        if let Some(stdin) = self.stdin.as_mut() {
+            let _ = stdin.write_all(b"{\"protocol\":\"generic-app\",\"kind\":\"shutdown\"}\n");
+            let _ = stdin.flush();
+        }
+        self.stdin.take();
+
+        let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
+        while Instant::now() < deadline {
+            match self.child.try_wait() {
+                Ok(Some(_)) => {
+                    signal_process_tree(self.pid, 9);
+                    self.terminated = true;
+                    return;
+                }
+                Ok(None) => thread::sleep(Duration::from_millis(20)),
+                Err(_) => break,
+            }
+        }
+        self.terminate_now();
     }
 
     fn write_frame<T: Serialize>(&mut self, value: &T, trace_id: &str) -> AppResult<()> {
@@ -203,72 +288,46 @@ impl BackendClient {
             .ok_or_else(|| AppError::unavailable(trace_id))?;
         stdin
             .write_all(&encoded)
-            .map_err(|_| AppError::io(trace_id))?;
-        stdin.flush().map_err(|_| AppError::io(trace_id))
+            .map_err(|_| AppError::crashed(trace_id))?;
+        stdin.flush().map_err(|_| AppError::crashed(trace_id))
     }
 }
 
 impl Drop for BackendClient {
     fn drop(&mut self) {
-        if let Some(stdin) = self.stdin.as_mut() {
-            let _ = stdin.write_all(b"{\"protocol\":\"generic-app\",\"kind\":\"shutdown\"}\n");
-            let _ = stdin.flush();
-        }
-        self.stdin.take();
-
-        let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
-        while Instant::now() < deadline {
-            match self.child.try_wait() {
-                Ok(Some(_)) => return,
-                Ok(None) => thread::sleep(Duration::from_millis(20)),
-                Err(_) => break,
-            }
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        self.shutdown();
     }
 }
 
-fn validate_response(
-    response: ResponseEnvelope,
+fn validate_echo_response(
+    response: Value,
     request_id: &str,
     trace_id: &str,
 ) -> AppResult<EchoResponse> {
-    if response.protocol != "generic-app"
-        || response.request_id.as_deref() != Some(request_id)
-        || response.trace_id != trace_id
+    if response.get("protocol").and_then(Value::as_str) != Some("generic-app")
+        || response.get("requestId").and_then(Value::as_str) != Some(request_id)
+        || response.get("traceId").and_then(Value::as_str) != Some(trace_id)
     {
         return Err(AppError::protocol(
             "Backend response identity mismatch.",
             trace_id,
         ));
     }
-    match response.kind.as_str() {
-        "result" => {
-            if response.operation.as_deref() != Some("spike.echo") || response.error.is_some() {
+    match response.get("kind").and_then(Value::as_str) {
+        Some("result") => {
+            if response.get("operation").and_then(Value::as_str) != Some("spike.echo") {
                 return Err(AppError::protocol("Backend result is invalid.", trace_id));
             }
-            let payload = response
-                .payload
+            let text = response
+                .pointer("/payload/text")
+                .and_then(Value::as_str)
                 .ok_or_else(|| AppError::protocol("Backend result is missing.", trace_id))?;
             Ok(EchoResponse {
-                text: payload.text,
+                text: text.to_owned(),
                 trace_id: trace_id.to_owned(),
             })
         }
-        "error" => {
-            let error = response
-                .error
-                .ok_or_else(|| AppError::protocol("Backend error is missing.", trace_id))?;
-            match error.code.as_str() {
-                "VALIDATION_ERROR" => Err(AppError::validation(error.message, trace_id)),
-                "RESOURCE_EXHAUSTED" => Err(AppError::exhausted(trace_id)),
-                _ => Err(AppError::protocol(
-                    "Backend rejected the request.",
-                    trace_id,
-                )),
-            }
-        }
+        Some("error") => Err(map_backend_error(&response, trace_id)),
         _ => Err(AppError::protocol(
             "Backend response kind is invalid.",
             trace_id,
@@ -276,10 +335,33 @@ fn validate_response(
     }
 }
 
+pub(crate) fn map_backend_error(value: &Value, trace_id: &str) -> AppError {
+    let code = value
+        .pointer("/error/code")
+        .and_then(Value::as_str)
+        .unwrap_or("PROTOCOL_ERROR");
+    let message = value
+        .pointer("/error/message")
+        .and_then(Value::as_str)
+        .unwrap_or("Backend rejected the request.");
+    match code {
+        "VALIDATION_ERROR" => AppError::validation(message, trace_id),
+        "CONFLICT" => AppError::conflict(message, trace_id),
+        "NOT_FOUND" => AppError::not_found(message, trace_id),
+        "RESOURCE_EXHAUSTED" => AppError::exhausted(trace_id),
+        "TIMEOUT" => AppError::timeout(trace_id),
+        "CANCELLED" => AppError::cancelled(trace_id),
+        "INTERRUPTED" => AppError::interrupted(trace_id),
+        "BACKEND_CRASHED" => AppError::crashed(trace_id),
+        _ => AppError::protocol("Backend rejected the request.", trace_id),
+    }
+}
+
 fn map_frame_error(error: FrameReadError, trace_id: &str) -> AppError {
     match error {
         FrameReadError::TooLarge => AppError::exhausted(trace_id),
-        FrameReadError::Io | FrameReadError::Eof => AppError::io(trace_id),
+        FrameReadError::Io => AppError::io(trace_id),
+        FrameReadError::Eof => AppError::crashed(trace_id),
     }
 }
 
@@ -299,6 +381,7 @@ fn read_bounded_line<R: BufRead>(
         }
         if let Some(index) = available.iter().position(|byte| *byte == b'\n') {
             if line.len() + index > maximum {
+                reader.consume(index + 1);
                 return Err(FrameReadError::TooLarge);
             }
             line.extend_from_slice(&available[..index]);
@@ -309,11 +392,48 @@ fn read_bounded_line<R: BufRead>(
             return Ok(line);
         }
         if line.len() + available.len() > maximum {
+            let count = available.len();
+            reader.consume(count);
             return Err(FrameReadError::TooLarge);
         }
         let count = available.len();
         line.extend_from_slice(available);
         reader.consume(count);
+    }
+}
+
+fn read_bounded_log_line<R: BufRead>(reader: &mut R, maximum: usize) -> Option<Vec<u8>> {
+    let mut line = Vec::with_capacity(maximum.min(8192));
+    let mut truncated = false;
+    loop {
+        let available = reader.fill_buf().ok()?;
+        if available.is_empty() {
+            if line.is_empty() && !truncated {
+                return None;
+            }
+            break;
+        }
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let count = newline.unwrap_or(available.len());
+        if !truncated {
+            let remaining = maximum.saturating_sub(line.len());
+            line.extend_from_slice(&available[..count.min(remaining)]);
+            truncated = count > remaining;
+        }
+        reader.consume(count + usize::from(newline.is_some()));
+        if newline.is_some() {
+            break;
+        }
+    }
+    if truncated {
+        Some(
+            br#"{"component":"python-backend","event":"log_truncated","level":"warning"}"#.to_vec(),
+        )
+    } else {
+        if line.last() == Some(&b'\r') {
+            line.pop();
+        }
+        Some(line)
     }
 }
 
@@ -339,6 +459,60 @@ fn apply_minimal_environment(command: &mut Command) {
     } else {
         command.env("LANG", "C.UTF-8").env("LC_ALL", "C.UTF-8");
     }
+}
+
+#[cfg(unix)]
+fn configure_process_containment(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    command.process_group(0);
+    #[cfg(target_os = "linux")]
+    {
+        let parent_pid = std::process::id() as i32;
+        // SAFETY: the closure calls only async-signal-safe Linux syscalls before exec.
+        unsafe {
+            command.pre_exec(move || {
+                // PR_SET_PDEATHSIG asks the kernel to kill the sidecar if the host dies.
+                if c_prctl(1, 9, 0, 0, 0) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if c_getppid() != parent_pid {
+                    return Err(std::io::Error::other(
+                        "native host exited before sidecar exec",
+                    ));
+                }
+                Ok(())
+            });
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn configure_process_containment(_command: &mut Command) {}
+
+#[cfg(unix)]
+fn signal_process_tree(pid: u32, signal: i32) {
+    // SAFETY: a negative PID targets only the process group created for this child.
+    unsafe {
+        let _ = c_kill(-(pid as i32), signal);
+    }
+}
+
+#[cfg(not(unix))]
+fn signal_process_tree(_pid: u32, _signal: i32) {}
+
+#[cfg(unix)]
+extern "C" {
+    #[link_name = "kill"]
+    fn c_kill(pid: i32, signal: i32) -> i32;
+}
+
+#[cfg(target_os = "linux")]
+extern "C" {
+    #[link_name = "prctl"]
+    fn c_prctl(option: i32, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> i32;
+    #[link_name = "getppid"]
+    fn c_getppid() -> i32;
 }
 
 fn working_directory_from<'a>(executable: &'a Path, trace_id: &str) -> AppResult<&'a Path> {
@@ -396,7 +570,7 @@ fn verify_bundle(bundle_root: &Path, manifest: &BundleManifest, trace_id: &str) 
 mod tests {
     use std::io::{BufReader, Cursor};
 
-    use super::{read_bounded_line, FrameReadError};
+    use super::{read_bounded_line, read_bounded_log_line, FrameReadError};
 
     #[test]
     fn crlf_is_accepted() {
@@ -415,5 +589,16 @@ mod tests {
             read_bounded_line(&mut reader, 64),
             Err(FrameReadError::TooLarge)
         ));
+    }
+
+    #[test]
+    fn oversized_log_is_safely_truncated() {
+        let mut data = vec![b'x'; 96];
+        data.push(b'\n');
+        let mut reader = BufReader::new(Cursor::new(data));
+        let line = read_bounded_log_line(&mut reader, 64).expect("log line");
+        assert!(String::from_utf8(line)
+            .expect("marker must be UTF-8")
+            .contains("log_truncated"));
     }
 }

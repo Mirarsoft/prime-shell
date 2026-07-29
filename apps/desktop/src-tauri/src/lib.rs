@@ -1,22 +1,17 @@
 pub mod backend;
 
-use std::{
-    env, fs,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex,
-    },
-};
+use std::{env, fs, sync::Arc, time::Duration};
 
-use backend::{AppError, AppResult, BackendClient, BackendStatus, EchoResponse, LaunchSpec};
+use backend::{
+    AppError, AppResult, BackendRuntime, BackendStatus, CancelReceipt, EchoResponse, LaunchSpec,
+    TaskEventSink, TaskSnapshot,
+};
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{ipc::Channel, AppHandle, Manager, State};
 
 struct BackendState {
-    client: Mutex<Option<BackendClient>>,
+    runtime: BackendRuntime,
 }
-
-static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,32 +22,68 @@ struct RuntimeProbeConfig {
 
 #[tauri::command]
 fn backend_status(state: State<'_, BackendState>) -> AppResult<BackendStatus> {
-    let client = state
-        .client
-        .lock()
-        .map_err(|_| AppError::internal("backend-status"))?;
-    Ok(match client.as_ref() {
-        Some(client) => client.status(),
-        None => BackendStatus {
-            ready: false,
-            backend_version: None,
-        },
-    })
+    state.runtime.status()
 }
 
 #[tauri::command]
 fn echo_text(text: String, state: State<'_, BackendState>) -> AppResult<EchoResponse> {
-    let sequence = REQUEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let request_id = format!("request-{sequence}");
-    let trace_id = format!("trace-{}-{sequence}", std::process::id());
-    let mut client = state
-        .client
-        .lock()
-        .map_err(|_| AppError::internal(&trace_id))?;
-    client
-        .as_mut()
-        .ok_or_else(|| AppError::unavailable(&trace_id))?
-        .echo(&text, &request_id, &trace_id)
+    state.runtime.echo(text)
+}
+
+#[tauri::command]
+fn start_count(
+    count_to: u64,
+    interval_ms: u64,
+    timeout_ms: u64,
+    on_event: Channel<TaskSnapshot>,
+    state: State<'_, BackendState>,
+) -> AppResult<TaskSnapshot> {
+    let trace = "start-count";
+    if !(1..=10_000).contains(&count_to) {
+        return Err(AppError::validation(
+            "Count must be between 1 and 10000.",
+            trace,
+        ));
+    }
+    if !(10..=1_000).contains(&interval_ms) {
+        return Err(AppError::validation(
+            "Count interval must be between 10 and 1000 milliseconds.",
+            trace,
+        ));
+    }
+    if !(100..=300_000).contains(&timeout_ms) {
+        return Err(AppError::validation(
+            "Task timeout must be between 100 and 300000 milliseconds.",
+            trace,
+        ));
+    }
+    let sink: TaskEventSink = Arc::new(move |event| {
+        let _ = on_event.send(event);
+    });
+    state.runtime.start(
+        "spike.count",
+        serde_json::json!({
+            "countTo": count_to,
+            "intervalMs": interval_ms,
+        }),
+        Duration::from_millis(timeout_ms),
+        sink,
+    )
+}
+
+#[tauri::command]
+fn cancel_task(task_id: String, state: State<'_, BackendState>) -> AppResult<CancelReceipt> {
+    state.runtime.cancel(task_id)
+}
+
+#[tauri::command]
+fn task_status(task_id: String, state: State<'_, BackendState>) -> AppResult<TaskSnapshot> {
+    state.runtime.task_status(task_id)
+}
+
+#[tauri::command]
+fn recover_backend(state: State<'_, BackendState>) -> AppResult<BackendStatus> {
+    state.runtime.recover()
 }
 
 #[tauri::command]
@@ -85,17 +116,19 @@ fn write_runtime_evidence(evidence: serde_json::Value, app: AppHandle) -> AppRes
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let client = app.path().resource_dir().ok().and_then(|resource_dir| {
-                BackendClient::launch(LaunchSpec::from_resource_dir(&resource_dir)).ok()
-            });
+            let resource_dir = app.path().resource_dir()?;
             app.manage(BackendState {
-                client: Mutex::new(client),
+                runtime: BackendRuntime::launch(LaunchSpec::from_resource_dir(&resource_dir)),
             });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             backend_status,
             echo_text,
+            start_count,
+            cancel_task,
+            task_status,
+            recover_backend,
             runtime_probe_config,
             write_runtime_evidence
         ])

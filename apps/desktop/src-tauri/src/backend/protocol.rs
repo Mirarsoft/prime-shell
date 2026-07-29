@@ -1,10 +1,21 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::error::{AppError, AppResult};
 
 pub const HANDSHAKE_MAX_BYTES: usize = 64 * 1024;
 pub const FRAME_MAX_BYTES: usize = 1024 * 1024;
+pub const LOG_MAX_BYTES: usize = 64 * 1024;
 pub const TEXT_MAX_CHARACTERS: usize = 262_144;
+pub const PENDING_REQUEST_MAX: usize = 64;
+pub const BACKEND_EVENT_MAX: usize = 256;
+pub const SUPPORTED_OPERATIONS: [&str; 5] = [
+    "spike.echo",
+    "spike.count",
+    "spike.crash",
+    "spike.hang",
+    "spike.largeRejected",
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -48,44 +59,23 @@ pub struct RequestEnvelope<'a> {
     pub request_id: &'a str,
     pub trace_id: &'a str,
     pub operation: &'static str,
-    pub payload: EchoPayload<'a>,
+    pub payload: &'a Value,
 }
 
 #[derive(Debug, Serialize)]
-pub struct EchoPayload<'a> {
-    pub text: &'a str,
-}
-
-#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ResponseEnvelope {
-    pub protocol: String,
-    pub kind: String,
-    pub request_id: Option<String>,
-    pub trace_id: String,
-    pub operation: Option<String>,
-    pub payload: Option<EchoResultPayload>,
-    pub error: Option<BackendErrorPayload>,
+pub struct CancelEnvelope<'a> {
+    pub protocol: &'static str,
+    pub kind: &'static str,
+    pub request_id: &'a str,
+    pub trace_id: &'a str,
+    pub task_id: &'a str,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EchoResultPayload {
     pub text: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct BackendErrorPayload {
-    pub code: String,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct BackendStatus {
-    pub ready: bool,
-    #[serde(rename = "backendVersion")]
-    pub backend_version: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -124,7 +114,9 @@ pub fn validate_hello(
             trace,
         ));
     }
-    if hello.python_version.is_empty() || hello.supported_operations != ["spike.echo".to_owned()] {
+    if hello.python_version.is_empty()
+        || hello.supported_operations != SUPPORTED_OPERATIONS.map(str::to_owned).to_vec()
+    {
         return Err(AppError::mismatch(
             "Packaged backend capabilities mismatch.",
             trace,
@@ -161,7 +153,7 @@ mod tests {
             target_triple: "linux-x86_64".to_owned(),
             python_version: "3.12.13".to_owned(),
             schema_hash: manifest().schema_hash,
-            supported_operations: vec!["spike.echo".to_owned()],
+            supported_operations: super::SUPPORTED_OPERATIONS.map(str::to_owned).to_vec(),
         }
     }
 

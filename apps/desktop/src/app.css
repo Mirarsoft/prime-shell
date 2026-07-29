@@ -30,7 +30,7 @@ body {
 
 .card {
   display: grid;
-  gap: 20px;
+  gap: 24px;
   width: min(680px, 100%);
   padding: 28px;
 }
@@ -47,6 +47,38 @@ body {
   text-align: right;
 }
 
+.task-panel,
+.echo-panel,
+.task-result,
+.error {
+  display: grid;
+  gap: 12px;
+}
+
+.task-panel,
+.echo-panel {
+  padding-block-start: 4px;
+  border-block-start: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.task-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.task-result {
+  padding: 16px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+}
+
 .result {
   display: grid;
   gap: 8px;
@@ -61,7 +93,36 @@ output {
 }
 
 .error {
+  padding: 12px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
   color: #b10e1c;
+}
+
+@media (max-width: 600px) {
+  .card header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .status {
+    text-align: left;
+  }
+
+  .task-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -69,4 +130,3 @@ output {
     color: #dc626d;
   }
 }
-

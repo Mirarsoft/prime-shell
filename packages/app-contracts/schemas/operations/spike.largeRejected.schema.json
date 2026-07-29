@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prime-shell.local/schemas/operations/spike.largeRejected.schema.json",
+  "title": "spike.largeRejected",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestedBytes"],
+      "properties": {
+        "requestedBytes": {
+          "type": "integer",
+          "minimum": 1048577,
+          "maximum": 8388608
+        }
+      }
+    }
+  }
+}

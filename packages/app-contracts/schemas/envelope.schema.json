@@ -22,6 +22,58 @@
       "required": ["protocol", "kind", "requestId", "traceId", "operation", "payload"],
       "properties": {
         "protocol": { "const": "generic-app" },
+        "kind": { "const": "request" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operation": { "const": "spike.count" },
+        "payload": { "$ref": "operations/spike.count.schema.json#/$defs/request" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind", "requestId", "traceId", "operation", "payload"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "request" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operation": { "const": "spike.crash" },
+        "payload": { "$ref": "operations/spike.crash.schema.json#/$defs/request" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind", "requestId", "traceId", "operation", "payload"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "request" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operation": { "const": "spike.hang" },
+        "payload": { "$ref": "operations/spike.hang.schema.json#/$defs/request" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind", "requestId", "traceId", "operation", "payload"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "request" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operation": { "const": "spike.largeRejected" },
+        "payload": { "$ref": "operations/spike.largeRejected.schema.json#/$defs/request" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind", "requestId", "traceId", "operation", "payload"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
         "kind": { "const": "result" },
         "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
         "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
@@ -31,6 +83,9 @@
     },
     {
       "$ref": "errors.schema.json"
+    },
+    {
+      "$ref": "task-events.schema.json"
     },
     {
       "type": "object",
@@ -43,4 +98,3 @@
     }
   ]
 }
-

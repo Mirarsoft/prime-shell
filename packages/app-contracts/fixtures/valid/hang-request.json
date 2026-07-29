@@ -1,0 +1,8 @@
+{
+  "protocol": "generic-app",
+  "kind": "request",
+  "requestId": "request-hang-1",
+  "traceId": "trace-hang-1",
+  "operation": "spike.hang",
+  "payload": {}
+}

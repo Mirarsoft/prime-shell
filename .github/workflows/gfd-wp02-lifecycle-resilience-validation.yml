@@ -1,0 +1,250 @@
+name: GFD WP02 Lifecycle Resilience Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-2404:
+    name: Ubuntu 24.04 WP02 lifecycle validation
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: fresh-source/prime-shell
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Install native Tauri prerequisites
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            pkg-config \
+            xvfb
+
+      - name: Verify and extract authoritative snapshot
+        working-directory: .
+        run: |
+          set -euo pipefail
+          rm -rf fresh-source
+          mkdir -p fresh-source
+          git archive \
+            --format=zip \
+            --prefix=prime-shell/ \
+            --output="$RUNNER_TEMP/prime-shell-authoritative.zip" \
+            HEAD
+          unzip -t "$RUNNER_TEMP/prime-shell-authoritative.zip"
+          python3 - "$RUNNER_TEMP/prime-shell-authoritative.zip" <<'PY'
+          import sys
+          import zipfile
+          from pathlib import PurePosixPath
+
+          with zipfile.ZipFile(sys.argv[1]) as archive:
+              bad_crc = archive.testzip()
+              if bad_crc is not None:
+                  raise SystemExit(f"archive CRC failure: {bad_crc}")
+              roots = set()
+              for name in archive.namelist():
+                  path = PurePosixPath(name)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"unsafe archive path: {name}")
+                  if path.parts:
+                      roots.add(path.parts[0])
+          if roots != {"prime-shell"}:
+              raise SystemExit(f"unexpected archive roots: {sorted(roots)}")
+          PY
+          unzip -q "$RUNNER_TEMP/prime-shell-authoritative.zip" -d fresh-source
+          test -f fresh-source/prime-shell/apps/desktop/src-tauri/Cargo.lock
+          sha256sum "$RUNNER_TEMP/prime-shell-authoritative.zip"
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: 3.12.13
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Record bounded tool identity
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/wp02
+          {
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'runner_os=%s\n' "$RUNNER_OS"
+            printf 'runner_arch=%s\n' "$RUNNER_ARCH"
+            printf 'kernel=%s\n' "$(uname -srm)"
+            printf 'node=%s\n' "$(node --version)"
+            printf 'pnpm=%s\n' "$(pnpm --version)"
+            printf 'python=%s\n' "$(python3 --version)"
+            printf 'rustc=%s\n' "$(rustc --version)"
+            printf 'cargo=%s\n' "$(cargo --version)"
+          } >artifacts/wp02/tool-identity.txt
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate contracts
+        run: pnpm contract:test | tee artifacts/wp02/contracts.json
+
+      - name: Typecheck frontend
+        run: pnpm typecheck | tee artifacts/wp02/typecheck.txt
+
+      - name: Lint frontend
+        run: pnpm lint | tee artifacts/wp02/lint.txt
+
+      - name: Test frontend
+        run: pnpm test | tee artifacts/wp02/frontend-tests.txt
+
+      - name: Build frontend
+        run: pnpm build | tee artifacts/wp02/frontend-build.txt
+
+      - name: Test Python sidecar protocol
+        run: pnpm sidecar:test 2>&1 | tee artifacts/wp02/python-tests.txt
+
+      - name: Create pinned Python build environment
+        run: |
+          python3 -m venv .venv-build
+          .venv-build/bin/python -m pip install \
+            --no-input \
+            --require-hashes \
+            -r services/python-backend/requirements-build.lock
+
+      - name: Build packaged Python sidecar
+        run: pnpm sidecar:build
+
+      - name: Verify packaged sidecar
+        run: pnpm sidecar:verify | tee artifacts/wp02/packaged-sidecar.json
+
+      - name: Verify protocol and queue bounds
+        run: |
+          python3 scripts/verify/wp02_protocol_bounds.py |
+            tee artifacts/wp02/protocol-bounds.json
+
+      - name: Verify direct packaged lifecycle
+        run: |
+          python3 scripts/verify/wp02_lifecycle.py |
+            tee artifacts/wp02/direct-lifecycle.json
+
+      - name: Check Rust formatting
+        working-directory: fresh-source/prime-shell/apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      - name: Lint Rust
+        working-directory: fresh-source/prime-shell/apps/desktop/src-tauri
+        run: |
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 |
+            tee ../../../artifacts/wp02/rust-clippy.txt
+
+      - name: Test Rust lifecycle and packaged boundary
+        working-directory: fresh-source/prime-shell/apps/desktop/src-tauri
+        env:
+          PRIME_SHELL_PACKAGED_SIDECAR: ../../../services/python-backend/dist/sidecar/linux-x86_64/prime-shell-python-backend/prime-shell-python-backend
+        run: |
+          cargo test --locked -- --include-ignored 2>&1 |
+            tee ../../../artifacts/wp02/rust-tests.txt
+
+      - name: Build Tauri release
+        run: xvfb-run -a pnpm --filter @prime-shell/desktop tauri build --bundles deb -- --locked
+
+      - name: Verify native Tauri lifecycle
+        run: pnpm native:verify | tee artifacts/wp02/native-verifier.txt
+
+      - name: Verify diff and status
+        run: |
+          git diff --check
+          git status --short --branch | tee artifacts/wp02/git-status.txt
+
+      - name: Record run metadata
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          JOB_NAME: Ubuntu 24.04 WP02 lifecycle validation
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value = {
+              "commit": os.environ["HEAD_SHA"],
+              "runId": int(os.environ["RUN_ID"]),
+              "runAttempt": int(os.environ["RUN_ATTEMPT"]),
+              "jobName": os.environ["JOB_NAME"],
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "workflow": os.environ["GITHUB_WORKFLOW"],
+          }
+          Path("artifacts/wp02/run-metadata.json").write_text(
+              json.dumps(value, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Stage and hash bounded evidence
+        if: always()
+        working-directory: .
+        run: |
+          set -euo pipefail
+          upload_root="$RUNNER_TEMP/wp02-upload"
+          rm -rf "$upload_root"
+          mkdir -p "$upload_root/evidence"
+          cp "$RUNNER_TEMP/prime-shell-authoritative.zip" \
+            "$upload_root/prime-shell-authoritative.zip"
+          if [[ -d fresh-source/prime-shell/artifacts/wp02 ]]; then
+            cp -a fresh-source/prime-shell/artifacts/wp02/. \
+              "$upload_root/evidence/"
+          fi
+          deb_path="$(
+            find fresh-source/prime-shell/apps/desktop/src-tauri/target/release/bundle/deb \
+              -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null || true
+          )"
+          if [[ -n "$deb_path" && -f "$deb_path" ]]; then
+            cp "$deb_path" "$upload_root/"
+          fi
+          manifest_path="fresh-source/prime-shell/services/python-backend/dist/sidecar/linux-x86_64/sidecar-manifest.json"
+          if [[ -f "$manifest_path" ]]; then
+            cp "$manifest_path" "$upload_root/sidecar-manifest.json"
+          fi
+          (
+            cd "$upload_root"
+            find . -type f ! -name sha256sums.txt -print0 |
+              sort -z |
+              xargs -0 sha256sum >sha256sums.txt
+          )
+
+      - name: Upload bounded WP02 evidence
+        if: always()
+        id: evidence-upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: gfd-p0b-wp02-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wp02-upload
+          if-no-files-found: error
+          retention-days: 14
