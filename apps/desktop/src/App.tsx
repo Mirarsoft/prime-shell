@@ -60,6 +60,8 @@ export default function App() {
   const [task, setTask] = useState<TaskSnapshot | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const runtimeProbeStarted = useRef(false);
+  const measuringRenderedProgress = useRef(false);
+  const renderedProgressTimes = useRef<number[]>([]);
   const cspViolations = useRef<string[]>([]);
 
   const backendReady = backend?.state === "Ready";
@@ -97,6 +99,17 @@ export default function App() {
       .catch((reason: unknown) => setError(toSafeError(reason)))
       .finally(() => setChecking(false));
   }, []);
+
+  useEffect(() => {
+    if (
+      measuringRenderedProgress.current &&
+      task?.state === "Running" &&
+      task.progress !== null &&
+      renderedProgressTimes.current.length < 128
+    ) {
+      renderedProgressTimes.current.push(performance.now());
+    }
+  }, [task]);
 
   async function submitEcho() {
     setEchoBusy(true);
@@ -184,6 +197,8 @@ export default function App() {
       let safeError = "";
       const countEvents: Array<TaskSnapshot & { observedAtMs: number }> = [];
       let terminalObservedAtMs = 0;
+      renderedProgressTimes.current = [];
+      measuringRenderedProgress.current = true;
 
       setText(RUNTIME_PROBE_TEXT);
       setError(null);
@@ -211,7 +226,7 @@ export default function App() {
       });
       const countAcceptedAtMs = performance.now();
       setTask(countAccepted);
-      await new Promise((resolve) => setTimeout(resolve, 240));
+      await new Promise((resolve) => setTimeout(resolve, 360));
       const cancellationStartedAtMs = performance.now();
       const countCancelAcknowledgement = await cancelTask(
         countAccepted.taskId,
@@ -227,15 +242,6 @@ export default function App() {
         }),
       ]);
       const countStatus = await refreshBackend();
-      const progressTimes = countEvents
-        .filter(
-          (event) => event.state === "Running" && event.progress !== null,
-        )
-        .map((event) => event.observedAtMs);
-      const progressIntervals = progressTimes
-        .slice(1)
-        .map((value, index) => value - progressTimes[index]);
-
       try {
         await echoText("x".repeat(262_145));
       } catch (reason) {
@@ -245,6 +251,14 @@ export default function App() {
       }
 
       await new Promise((resolve) => requestAnimationFrame(resolve));
+      measuringRenderedProgress.current = false;
+      const progressEvents = countEvents.filter(
+        (event) => event.state === "Running" && event.progress !== null,
+      );
+      const progressRenderTimes = [...renderedProgressTimes.current];
+      const progressIntervals = progressRenderTimes
+        .slice(1)
+        .map((value, index) => value - progressRenderTimes[index]);
 
       await writeRuntimeEvidence({
         status: "passed",
@@ -277,7 +291,7 @@ export default function App() {
           (event, index) =>
             index === 0 || event.sequence > countEvents[index - 1].sequence,
         ),
-        countProgressObserved: progressTimes.length > 0,
+        countProgressObserved: progressEvents.length > 0,
         uiProgressMinimumIntervalMs:
           progressIntervals.length === 0
             ? null
