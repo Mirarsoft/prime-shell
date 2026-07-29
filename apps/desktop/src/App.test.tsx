@@ -125,8 +125,18 @@ describe("WP02 lifecycle UI", () => {
     act(() => {
       channels[0].onmessage({
         ...acceptedTask,
-        state: "Succeeded",
         sequence: 2,
+        progress: { current: 8, target: 20 },
+      });
+    });
+    expect(screen.getByText("4 of 20")).toBeInTheDocument();
+    expect(screen.queryByText("8 of 20")).not.toBeInTheDocument();
+
+    act(() => {
+      channels[0].onmessage({
+        ...acceptedTask,
+        state: "Succeeded",
+        sequence: 3,
         progress: { current: 20, target: 20 },
         result: { count: 20 },
       });

@@ -31,6 +31,7 @@ import type {
 import "./app.css";
 
 const RUNTIME_PROBE_TEXT = "Hello — مرحبا — こんにちは 👋";
+const UI_PROGRESS_INTERVAL_MS = 100;
 const TERMINAL_STATES = new Set<TaskLifecycle>([
   "Succeeded",
   "Failed",
@@ -38,6 +39,13 @@ const TERMINAL_STATES = new Set<TaskLifecycle>([
   "TimedOut",
   "Interrupted",
 ]);
+
+type ProgressDelivery = {
+  taskId: string | null;
+  lastDeliveredAtMs: number;
+  pending: TaskSnapshot | null;
+  timerId: number | null;
+};
 
 function preferredTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -62,6 +70,12 @@ export default function App() {
   const runtimeProbeStarted = useRef(false);
   const measuringRenderedProgress = useRef(false);
   const renderedProgressTimes = useRef<number[]>([]);
+  const progressDelivery = useRef<ProgressDelivery>({
+    taskId: null,
+    lastDeliveredAtMs: Number.NEGATIVE_INFINITY,
+    pending: null,
+    timerId: null,
+  });
   const cspViolations = useRef<string[]>([]);
 
   const backendReady = backend?.state === "Ready";
@@ -73,12 +87,59 @@ export default function App() {
     return status;
   }
 
-  function recordTaskEvent(event: TaskSnapshot) {
+  function deliverTaskEvent(event: TaskSnapshot) {
     setTask(event);
     if (TERMINAL_STATES.has(event.state)) {
       void refreshBackend().catch((reason: unknown) => {
         setError(toSafeError(reason));
       });
+    }
+  }
+
+  function clearPendingProgress() {
+    const delivery = progressDelivery.current;
+    if (delivery.timerId !== null) {
+      window.clearTimeout(delivery.timerId);
+    }
+    delivery.pending = null;
+    delivery.timerId = null;
+  }
+
+  function recordTaskEvent(event: TaskSnapshot) {
+    const delivery = progressDelivery.current;
+    if (delivery.taskId !== event.taskId) {
+      clearPendingProgress();
+      delivery.taskId = event.taskId;
+      delivery.lastDeliveredAtMs = Number.NEGATIVE_INFINITY;
+    }
+
+    if (event.state !== "Running" || event.progress === null) {
+      clearPendingProgress();
+      deliverTaskEvent(event);
+      return;
+    }
+
+    const now = performance.now();
+    const remaining =
+      UI_PROGRESS_INTERVAL_MS - (now - delivery.lastDeliveredAtMs);
+    if (remaining <= 0) {
+      clearPendingProgress();
+      delivery.lastDeliveredAtMs = now;
+      deliverTaskEvent(event);
+      return;
+    }
+
+    delivery.pending = event;
+    if (delivery.timerId === null) {
+      delivery.timerId = window.setTimeout(() => {
+        const pending = delivery.pending;
+        delivery.pending = null;
+        delivery.timerId = null;
+        if (pending !== null) {
+          delivery.lastDeliveredAtMs = performance.now();
+          deliverTaskEvent(pending);
+        }
+      }, remaining);
     }
   }
 
@@ -99,6 +160,13 @@ export default function App() {
       .catch((reason: unknown) => setError(toSafeError(reason)))
       .finally(() => setChecking(false));
   }, []);
+
+  useEffect(
+    () => () => {
+      clearPendingProgress();
+    },
+    [],
+  );
 
   useEffect(() => {
     if (
