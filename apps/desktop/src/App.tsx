@@ -5,7 +5,6 @@ import {
   Field,
   FluentProvider,
   Input,
-  ProgressBar,
   Spinner,
   Text,
   Title1,
@@ -229,7 +228,9 @@ export default function App() {
       ]);
       const countStatus = await refreshBackend();
       const progressTimes = countEvents
-        .filter((event) => event.progress !== null)
+        .filter(
+          (event) => event.state === "Running" && event.progress !== null,
+        )
         .map((event) => event.observedAtMs);
       const progressIntervals = progressTimes
         .slice(1)
@@ -361,9 +362,11 @@ export default function App() {
                 <Text weight="semibold">Task: {task.state}</Text>
                 {task.progress && (
                   <>
-                    <ProgressBar
+                    <progress
+                      className="count-progress"
                       aria-label="Count progress"
                       value={task.progress.current / task.progress.target}
+                      max={1}
                     />
                     <Text>
                       {task.progress.current} of {task.progress.target}

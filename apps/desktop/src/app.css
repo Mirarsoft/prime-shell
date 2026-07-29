@@ -79,6 +79,11 @@ body {
   border-radius: 6px;
 }
 
+.count-progress {
+  width: 100%;
+  accent-color: #0f6cbd;
+}
+
 .result {
   display: grid;
   gap: 8px;
