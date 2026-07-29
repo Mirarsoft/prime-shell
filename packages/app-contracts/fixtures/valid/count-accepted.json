@@ -1,0 +1,8 @@
+{
+  "protocol": "generic-app",
+  "kind": "accepted",
+  "requestId": "request-count-1",
+  "traceId": "trace-count-1",
+  "operation": "spike.count",
+  "taskId": "task-count-1"
+}

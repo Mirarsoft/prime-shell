@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prime-shell.local/schemas/task-events.schema.json",
+  "title": "Prime Shell Task and Backend State",
+  "$defs": {
+    "taskState": {
+      "enum": [
+        "Queued",
+        "Running",
+        "Cancelling",
+        "Succeeded",
+        "Failed",
+        "Cancelled",
+        "TimedOut",
+        "Interrupted"
+      ]
+    },
+    "terminalState": {
+      "enum": ["Succeeded", "Failed", "Cancelled", "TimedOut", "Interrupted"]
+    },
+    "backendState": {
+      "enum": ["Stopped", "Starting", "Ready", "Busy", "Restarting", "Faulted"]
+    },
+    "accepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "kind",
+        "requestId",
+        "traceId",
+        "operation",
+        "taskId"
+      ],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "accepted" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operation": {
+          "enum": ["spike.count", "spike.crash", "spike.hang"]
+        },
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "progressEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "kind",
+        "requestId",
+        "traceId",
+        "taskId",
+        "sequence",
+        "state",
+        "progress"
+      ],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "taskEvent" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "state": { "enum": ["Running", "Cancelling"] },
+        "progress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["current", "target"],
+          "properties": {
+            "current": { "type": "integer", "minimum": 0 },
+            "target": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "succeededEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "kind",
+        "requestId",
+        "traceId",
+        "taskId",
+        "sequence",
+        "state",
+        "result"
+      ],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "taskEvent" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "state": { "const": "Succeeded" },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count"],
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "failedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "kind",
+        "requestId",
+        "traceId",
+        "taskId",
+        "sequence",
+        "state",
+        "error"
+      ],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "taskEvent" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "state": { "enum": ["Failed", "Cancelled", "TimedOut", "Interrupted"] },
+        "error": { "$ref": "errors.schema.json#/$defs/safeError" }
+      }
+    },
+    "cancel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "kind", "requestId", "traceId", "taskId"],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "cancel" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "cancelAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "kind",
+        "requestId",
+        "traceId",
+        "taskId",
+        "accepted"
+      ],
+      "properties": {
+        "protocol": { "const": "generic-app" },
+        "kind": { "const": "cancelAck" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "accepted": { "type": "boolean" }
+      }
+    },
+    "backendStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "backendVersion",
+        "restartCount",
+        "circuitOpen",
+        "activeTaskId"
+      ],
+      "properties": {
+        "state": { "$ref": "#/$defs/backendState" },
+        "backendVersion": { "type": ["string", "null"], "maxLength": 64 },
+        "restartCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "circuitOpen": { "type": "boolean" },
+        "activeTaskId": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "lastError": {
+          "oneOf": [
+            { "$ref": "errors.schema.json#/$defs/safeError" },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/accepted" },
+    { "$ref": "#/$defs/progressEvent" },
+    { "$ref": "#/$defs/succeededEvent" },
+    { "$ref": "#/$defs/failedEvent" },
+    { "$ref": "#/$defs/cancel" },
+    { "$ref": "#/$defs/cancelAck" }
+  ]
+}

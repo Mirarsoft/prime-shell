@@ -1,0 +1,10 @@
+{
+  "protocol": "generic-app",
+  "kind": "request",
+  "requestId": "request-large-invalid",
+  "traceId": "trace-large-invalid",
+  "operation": "spike.largeRejected",
+  "payload": {
+    "requestedBytes": 1048576
+  }
+}

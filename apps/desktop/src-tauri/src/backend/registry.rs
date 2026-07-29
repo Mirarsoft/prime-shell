@@ -2,19 +2,35 @@ use super::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendOperation {
-    SpikeEcho,
+    Echo,
+    Count,
+    Crash,
+    Hang,
+    LargeRejected,
 }
 
 impl BackendOperation {
     pub const fn name(self) -> &'static str {
         match self {
-            Self::SpikeEcho => "spike.echo",
+            Self::Echo => "spike.echo",
+            Self::Count => "spike.count",
+            Self::Crash => "spike.crash",
+            Self::Hang => "spike.hang",
+            Self::LargeRejected => "spike.largeRejected",
         }
+    }
+
+    pub const fn is_long_running(self) -> bool {
+        matches!(self, Self::Count | Self::Crash | Self::Hang)
     }
 
     pub fn authorize(name: &str, trace_id: &str) -> AppResult<Self> {
         match name {
-            "spike.echo" => Ok(Self::SpikeEcho),
+            "spike.echo" => Ok(Self::Echo),
+            "spike.count" => Ok(Self::Count),
+            "spike.crash" => Ok(Self::Crash),
+            "spike.hang" => Ok(Self::Hang),
+            "spike.largeRejected" => Ok(Self::LargeRejected),
             _ => Err(AppError::validation(
                 "The requested operation is not authorized.",
                 trace_id,
@@ -35,13 +51,21 @@ mod tests {
     }
 
     #[test]
-    fn echo_is_the_only_authorized_operation() {
-        assert_eq!(
-            BackendOperation::authorize("spike.echo", "trace-registry")
-                .expect("echo must be authorized")
-                .name(),
-            "spike.echo"
-        );
+    fn exact_spike_operations_are_authorized() {
+        for name in [
+            "spike.echo",
+            "spike.count",
+            "spike.crash",
+            "spike.hang",
+            "spike.largeRejected",
+        ] {
+            assert_eq!(
+                BackendOperation::authorize(name, "trace-registry")
+                    .expect("operation must be authorized")
+                    .name(),
+                name
+            );
+        }
     }
 
     #[test]

@@ -3,7 +3,7 @@ use thiserror::Error;
 
 pub type AppResult<T> = Result<T, AppError>;
 
-#[derive(Debug, Error, Serialize)]
+#[derive(Clone, Debug, Error, Serialize)]
 #[error("{message}")]
 #[serde(rename_all = "camelCase")]
 pub struct AppError {
@@ -25,6 +25,30 @@ impl AppError {
         Self {
             code: "BACKEND_UNAVAILABLE",
             message: "The packaged backend is unavailable.".to_owned(),
+            trace_id: trace_id.into(),
+        }
+    }
+
+    pub fn crashed(trace_id: impl Into<String>) -> Self {
+        Self {
+            code: "BACKEND_CRASHED",
+            message: "The packaged backend stopped unexpectedly.".to_owned(),
+            trace_id: trace_id.into(),
+        }
+    }
+
+    pub fn conflict(message: impl Into<String>, trace_id: impl Into<String>) -> Self {
+        Self {
+            code: "CONFLICT",
+            message: message.into(),
+            trace_id: trace_id.into(),
+        }
+    }
+
+    pub fn not_found(message: impl Into<String>, trace_id: impl Into<String>) -> Self {
+        Self {
+            code: "NOT_FOUND",
+            message: message.into(),
             trace_id: trace_id.into(),
         }
     }
@@ -61,10 +85,34 @@ impl AppError {
         }
     }
 
+    pub fn timeout(trace_id: impl Into<String>) -> Self {
+        Self {
+            code: "TIMEOUT",
+            message: "The synthetic task exceeded its deadline.".to_owned(),
+            trace_id: trace_id.into(),
+        }
+    }
+
+    pub fn cancelled(trace_id: impl Into<String>) -> Self {
+        Self {
+            code: "CANCELLED",
+            message: "The synthetic task was cancelled.".to_owned(),
+            trace_id: trace_id.into(),
+        }
+    }
+
+    pub fn interrupted(trace_id: impl Into<String>) -> Self {
+        Self {
+            code: "INTERRUPTED",
+            message: "The synthetic task was interrupted.".to_owned(),
+            trace_id: trace_id.into(),
+        }
+    }
+
     pub fn internal(trace_id: impl Into<String>) -> Self {
         Self {
             code: "INTERNAL_ERROR",
-            message: "The echo request could not be completed.".to_owned(),
+            message: "The request could not be completed.".to_owned(),
             trace_id: trace_id.into(),
         }
     }

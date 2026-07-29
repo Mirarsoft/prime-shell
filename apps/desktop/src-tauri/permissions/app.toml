@@ -9,6 +9,26 @@ description = "Allows the main window to invoke only the typed WP01 Unicode echo
 commands.allow = ["echo_text"]
 
 [[permission]]
+identifier = "allow-start-count"
+description = "Allows the main window to start the bounded synthetic WP02 count task."
+commands.allow = ["start_count"]
+
+[[permission]]
+identifier = "allow-cancel-task"
+description = "Allows the main window to request cancellation of its active synthetic task."
+commands.allow = ["cancel_task"]
+
+[[permission]]
+identifier = "allow-task-status"
+description = "Allows the main window to read one bounded in-memory synthetic task status."
+commands.allow = ["task_status"]
+
+[[permission]]
+identifier = "allow-recover-backend"
+description = "Allows the main window to explicitly recover the bounded WP02 backend runtime."
+commands.allow = ["recover_backend"]
+
+[[permission]]
 identifier = "allow-runtime-probe"
-description = "Allows the environment-gated WP01 native runtime verifier commands."
+description = "Allows the environment-gated native runtime verifier commands."
 commands.allow = ["runtime_probe_config", "write_runtime_evidence"]

@@ -28,11 +28,16 @@
     "schemaHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "supportedOperations": {
       "type": "array",
-      "prefixItems": [{ "const": "spike.echo" }],
+      "prefixItems": [
+        { "const": "spike.echo" },
+        { "const": "spike.count" },
+        { "const": "spike.crash" },
+        { "const": "spike.hang" },
+        { "const": "spike.largeRejected" }
+      ],
       "items": false,
-      "minItems": 1,
-      "maxItems": 1
+      "minItems": 5,
+      "maxItems": 5
     }
   }
 }
-

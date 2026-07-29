@@ -1,0 +1,13 @@
+{
+  "protocol": "generic-app",
+  "kind": "taskEvent",
+  "requestId": "request-count-1",
+  "traceId": "trace-count-1",
+  "taskId": "task-count-1",
+  "sequence": 4,
+  "state": "Cancelled",
+  "error": {
+    "code": "CANCELLED",
+    "message": "The count task was cancelled."
+  }
+}
