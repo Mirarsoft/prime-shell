@@ -72,12 +72,6 @@ pub struct CancelEnvelope<'a> {
     pub task_id: &'a str,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct EchoResultPayload {
-    pub text: String,
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EchoResponse {

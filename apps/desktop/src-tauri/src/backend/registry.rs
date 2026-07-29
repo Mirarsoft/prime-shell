@@ -2,35 +2,35 @@ use super::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendOperation {
-    SpikeEcho,
-    SpikeCount,
-    SpikeCrash,
-    SpikeHang,
-    SpikeLargeRejected,
+    Echo,
+    Count,
+    Crash,
+    Hang,
+    LargeRejected,
 }
 
 impl BackendOperation {
     pub const fn name(self) -> &'static str {
         match self {
-            Self::SpikeEcho => "spike.echo",
-            Self::SpikeCount => "spike.count",
-            Self::SpikeCrash => "spike.crash",
-            Self::SpikeHang => "spike.hang",
-            Self::SpikeLargeRejected => "spike.largeRejected",
+            Self::Echo => "spike.echo",
+            Self::Count => "spike.count",
+            Self::Crash => "spike.crash",
+            Self::Hang => "spike.hang",
+            Self::LargeRejected => "spike.largeRejected",
         }
     }
 
     pub const fn is_long_running(self) -> bool {
-        matches!(self, Self::SpikeCount | Self::SpikeCrash | Self::SpikeHang)
+        matches!(self, Self::Count | Self::Crash | Self::Hang)
     }
 
     pub fn authorize(name: &str, trace_id: &str) -> AppResult<Self> {
         match name {
-            "spike.echo" => Ok(Self::SpikeEcho),
-            "spike.count" => Ok(Self::SpikeCount),
-            "spike.crash" => Ok(Self::SpikeCrash),
-            "spike.hang" => Ok(Self::SpikeHang),
-            "spike.largeRejected" => Ok(Self::SpikeLargeRejected),
+            "spike.echo" => Ok(Self::Echo),
+            "spike.count" => Ok(Self::Count),
+            "spike.crash" => Ok(Self::Crash),
+            "spike.hang" => Ok(Self::Hang),
+            "spike.largeRejected" => Ok(Self::LargeRejected),
             _ => Err(AppError::validation(
                 "The requested operation is not authorized.",
                 trace_id,
