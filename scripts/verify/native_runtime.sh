@@ -145,8 +145,11 @@ if [[ ! -s "$FORCED_PID_FILE" ]]; then
 fi
 
 FORCED_APP_PID="$(cat "$FORCED_PID_FILE")"
+FORCED_SIDECAR_PIDS="$(
+  pgrep -P "$FORCED_APP_PID" -f 'prime-shell-python-backend' || true
+)"
 SIDECAR_BEFORE_FORCED_CLOSE="$(
-  pgrep -P "$FORCED_APP_PID" -f 'prime-shell-python-backend' | wc -l
+  printf '%s\n' "$FORCED_SIDECAR_PIDS" | sed '/^$/d' | wc -l
 )"
 if [[ "$SIDECAR_BEFORE_FORCED_CLOSE" -ne 1 ]]; then
   kill "$FORCED_APP_PID" "$FORCED_WRAPPER_PID" 2>/dev/null || true
@@ -154,18 +157,32 @@ if [[ "$SIDECAR_BEFORE_FORCED_CLOSE" -ne 1 ]]; then
   echo "Expected exactly one sidecar before forced native-host close." >&2
   exit 1
 fi
+FORCED_SIDECAR_PID="$FORCED_SIDECAR_PIDS"
 
 kill -KILL "$FORCED_APP_PID"
-wait "$FORCED_WRAPPER_PID" 2>/dev/null || true
-sleep 3
+for _ in $(seq 1 30); do
+  if ! kill -0 "$FORCED_SIDECAR_PID" 2>/dev/null; then
+    break
+  fi
+  sleep 0.1
+done
 
 SIDECAR_AFTER_FORCED_CLOSE=0
-if pgrep -af 'prime-shell-python-backend' >/tmp/prime-shell-forced-sidecar-processes.txt; then
-  SIDECAR_AFTER_FORCED_CLOSE="$(
-    wc -l </tmp/prime-shell-forced-sidecar-processes.txt
-  )"
-  cat /tmp/prime-shell-forced-sidecar-processes.txt >&2
+if kill -0 "$FORCED_SIDECAR_PID" 2>/dev/null; then
+  SIDECAR_AFTER_FORCED_CLOSE=1
+  ps -o pid=,ppid=,stat=,comm= -p "$FORCED_SIDECAR_PID" >&2 || true
 fi
+
+for _ in $(seq 1 30); do
+  if ! kill -0 "$FORCED_WRAPPER_PID" 2>/dev/null; then
+    break
+  fi
+  sleep 0.1
+done
+if kill -0 "$FORCED_WRAPPER_PID" 2>/dev/null; then
+  kill "$FORCED_WRAPPER_PID" 2>/dev/null || true
+fi
+wait "$FORCED_WRAPPER_PID" 2>/dev/null || true
 
 python3 - "$PROCESS_EVIDENCE_FILE" "$SIDECAR_BEFORE_FORCED_CLOSE" "$SIDECAR_AFTER_FORCED_CLOSE" <<'PY'
 import json

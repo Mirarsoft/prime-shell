@@ -174,7 +174,7 @@ jobs:
         run: xvfb-run -a pnpm --filter @prime-shell/desktop tauri build --bundles deb -- --locked
 
       - name: Verify native Tauri lifecycle
-        run: pnpm native:verify | tee artifacts/wp02/native-verifier.txt
+        run: timeout --kill-after=10s 120s pnpm native:verify | tee artifacts/wp02/native-verifier.txt
 
       - name: Verify diff and status
         run: |
